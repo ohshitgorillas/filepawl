@@ -139,7 +139,7 @@ Stale audit, always over the whole allowance table regardless of argv:
 - entry names a file now at or under `watch`: fail, "back under watch line";
 - `exempt` names a path not in the tree: fail (config drift).
 
-`accept` fixes every one of these stale conditions; `check` names the command.
+`accept` fixes the first three stale conditions; `check` names the command. Exempt drift is policy, fixed by hand in `pyproject.toml`.
 
 ### 6.2 Directory-count gate
 
