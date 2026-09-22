@@ -109,6 +109,9 @@ mover = "command"
 mover_command = "npx jscodeshift -t scripts/move.js --old {old} --new {new} src/"
 ```
 
+`**` matches dot-directories: HQPTuner ratchets `.claude/hooks/*.py`, and
+`git ls-files` lists them, so the glob must too.
+
 A language block with no `mover` gets plain `git mv` plus a stale-reference
 grep. An unknown `mover` name is a config error (exit 2). Language block names
 are free-form; the built-in defaults exist only for `python`.
@@ -155,7 +158,9 @@ For each file in the include set:
 
 Stale audit, always over the whole allowance table regardless of argv:
 
-- entry names no file in the tree: fail, "drop it";
+- entry names a path outside the tree (`git ls-files` filtered through the
+  include globs): fail, "drop it". An untracked file on disk is outside the
+  tree, which the old scripts' `is_file()` check did not catch;
 - entry names a test path: fail;
 - entry names a file now at or under `watch`: fail, "back under watch line";
 - `exempt` names a path not in the tree: fail (config drift).
@@ -175,8 +180,13 @@ directories. No state, no ratchet.
 `filepawl check` with no paths scans `git ls-files` filtered through every
 language's `include` globs. Paths on argv narrow the length gate's measured set
 only. The stale audit and the directory gate always run over the whole tree,
-because pre-commit passes changed files only and a directory count over a
-subset is meaningless.
+because a directory count over a subset is meaningless.
+
+`.pre-commit-hooks.yaml` declares the hook with `pass_filenames: false` and
+`always_run: true`: one hook covers every language, where HQPTuner today needs
+a `types: [python]` hook and a `types: [javascript]` hook and checks CSS only
+from `make`. The whole-tree run is one `git ls-files` plus a line count per
+file, so nothing is saved by narrowing it.
 
 ### 6.4 Output and exit codes
 
