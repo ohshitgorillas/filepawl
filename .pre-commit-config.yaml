@@ -1,0 +1,31 @@
+repos:
+  - repo: .
+    rev: HEAD
+    hooks:
+      - id: filepawl
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: .venv/bin/ruff check .
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: black
+        name: black
+        entry: .venv/bin/black --check .
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: mypy
+        name: mypy
+        entry: .venv/bin/mypy --strict filepawl
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: pytest
+        name: pytest
+        entry: .venv/bin/pytest -q
+        language: system
+        pass_filenames: false
+        always_run: true

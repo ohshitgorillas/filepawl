@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "filepawl"
+version = "0.1.0"
+description = "File-length ratchet and directory-count gate, extracted from three consumer repositories."
+requires-python = ">=3.12"
+dependencies = [
+    "tomli-w",
+]
+
+[project.optional-dependencies]
+mv = [
+    "rope",
+]
+dev = [
+    "ruff",
+    "black",
+    "mypy",
+    "pytest",
+    "pre-commit",
+]
+
+[project.scripts]
+filepawl = "filepawl.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["filepawl", "filepawl.*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.black]
+target-version = ["py312"]
+line-length = 88
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "consumers: reads a live consumer checkout; skipped when absent",
+]

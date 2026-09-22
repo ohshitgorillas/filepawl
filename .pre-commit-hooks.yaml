@@ -1,0 +1,7 @@
+- id: filepawl
+  name: filepawl
+  description: File-length ratchet and directory-count gate.
+  entry: filepawl check
+  language: python
+  pass_filenames: false
+  always_run: true
