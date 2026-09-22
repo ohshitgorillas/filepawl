@@ -87,7 +87,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"filepawl: {exc}", file=sys.stderr)
         return 2
 
-    parser.print_help()
+    # No subcommand is a usage error, so the help goes where the other
+    # exit-2 messages go.
+    parser.print_help(sys.stderr)
     return 2
 
 

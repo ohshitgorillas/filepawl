@@ -343,4 +343,6 @@ def test_no_subcommand_prints_usage_and_exits_two(
     root = repo({"a.py": 10})
     monkeypatch.chdir(root)
     assert main([]) == 2
-    assert "usage: filepawl" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "usage: filepawl" in captured.err
+    assert captured.out == ""
