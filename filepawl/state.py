@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import tomli_w
-from tomli_w._writer import Context, format_inline_table, format_key_part
 
 from filepawl.errors import StateError
 
@@ -68,11 +67,16 @@ def load_state(root: Path) -> State:
     return State(version=version, allowance=allowance)
 
 
+def _format_key(name: str) -> str:
+    key, _, _ = tomli_w.dumps({name: 0}).partition(" = ")
+    return key
+
+
 def _format_entry(entry: Entry) -> str:
-    table: dict[str, object] = {"lines": entry.lines}
+    fields = [f"lines = {entry.lines}"]
     if entry.reason is not None:
-        table["reason"] = entry.reason
-    return format_inline_table(table, Context(allow_multiline=False, indent=4))
+        fields.append(tomli_w.dumps({"reason": entry.reason}).strip())
+    return "{ " + ", ".join(fields) + " }"
 
 
 def write_state(root: Path, state: State) -> None:
@@ -83,5 +87,5 @@ def write_state(root: Path, state: State) -> None:
         chunks.append("\n[allowance]\n")
         for name in sorted(state.allowance):
             entry = state.allowance[name]
-            chunks.append(f"{format_key_part(name)} = {_format_entry(entry)}\n")
+            chunks.append(f"{_format_key(name)} = {_format_entry(entry)}\n")
     path.write_text("".join(chunks), encoding="utf-8")
