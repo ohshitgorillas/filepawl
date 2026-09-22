@@ -95,6 +95,34 @@ class TestDircountGate:
 
         assert findings == []
 
+    def test_bare_tests_directory_passes_at_cap_tests(self, repo: RepoFactory) -> None:
+        base = default_policy()
+        policy = dataclasses.replace(
+            base,
+            dircount=dataclasses.replace(base.dircount, cap_tests=31),
+        )
+        files = {f"tests/test_{n}.py": 1 for n in range(31)}
+        root = repo(files)
+        tree = build_tree(root, policy)
+
+        findings = DircountGate().run(tree, policy, State())
+
+        assert findings == []
+
+    def test_bare_tests_directory_fails_over_cap_tests(self, repo: RepoFactory) -> None:
+        base = default_policy()
+        policy = dataclasses.replace(
+            base,
+            dircount=dataclasses.replace(base.dircount, cap_tests=30),
+        )
+        files = {f"tests/test_{n}.py": 1 for n in range(31)}
+        root = repo(files)
+        tree = build_tree(root, policy)
+
+        findings = DircountGate().run(tree, policy, State())
+
+        assert findings == [Finding(path="tests", message="31 files, cap 30")]
+
     def test_root_directory_counted(self, repo: RepoFactory) -> None:
         policy = dataclasses.replace(
             default_policy(),
