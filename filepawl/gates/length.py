@@ -40,7 +40,7 @@ class LengthGate:
             if self._stale_reason(path, tree, watch) is None
         }
         for path in tree.measured():
-            if tree.is_test(path) or not _measurable(tree, path):
+            if tree.is_test(path):
                 continue
             lines = tree.line_count(path)
             if lines <= watch:
@@ -55,8 +55,6 @@ class LengthGate:
     def _file_findings(
         self, path: str, tree: Tree, policy: Policy, state: State
     ) -> list[Finding]:
-        if not _measurable(tree, path):
-            return []
         length = policy.length
         lines = tree.line_count(path)
         exempt = path in policy.exempt
@@ -153,14 +151,9 @@ class LengthGate:
 
 
 def _in_tree(tree: Tree, path: str) -> bool:
-    """Whether a path is tracked, include-matched and present on disk.
+    """Whether a path is in the scanned tree.
 
-    `git ls-files` still lists a tracked file deleted from the working
-    tree; the source scripts read the filesystem (`Path.is_file()`), so a
-    path with no file behind it is outside the tree here too.
+    `build_tree` has already filtered `git ls-files` through the include
+    globs and through existence on disk, so membership is the whole test.
     """
-    return path in tree.files and (tree.root / path).is_file()
-
-
-def _measurable(tree: Tree, path: str) -> bool:
-    return (tree.root / path).is_file()
+    return path in tree.files

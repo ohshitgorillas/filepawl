@@ -228,6 +228,18 @@ def test_untracked_file_on_disk_is_outside_the_tree(repo: Repo) -> None:
     ]
 
 
+def test_tracked_file_deleted_from_disk_is_outside_the_tree(repo: Repo) -> None:
+    root = repo({"a.py": 5, "gone.py": WATCH + 5})
+    (root / "gone.py").unlink()
+    pol = policy()
+    state = state_for({"gone.py": Entry(lines=WATCH + 5)})
+    tree = tree_for(root, pol)
+    assert messages(LengthGate().run(tree, pol, state)) == [
+        ("gone.py", "allowance names a path outside the tree; drop it")
+    ]
+    assert LengthGate().accept(tree, pol, state).allowance == {}
+
+
 def test_stale_entry_naming_a_test_path(repo: Repo) -> None:
     root = repo({"tests/test_a.py": WATCH + 5})
     pol = policy()

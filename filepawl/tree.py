@@ -122,7 +122,12 @@ def _selected_paths(files: tuple[str, ...], paths: list[str]) -> tuple[str, ...]
 
 
 def build_tree(root: Path, policy: Policy, paths: list[str] | None = None) -> Tree:
-    """Scan `git ls-files` under `root`, filtered by every language's include globs."""
+    """Scan `git ls-files` under `root`, filtered by every language's include globs.
+
+    A tracked path with no file behind it — deleted from the working tree
+    without `git rm` — is dropped too: `files` is the tree as it exists on
+    disk, which is what the gates measure (docs/design.md §6.1).
+    """
     result = subprocess.run(
         ["git", "ls-files", "-z"],
         cwd=root,
@@ -145,7 +150,11 @@ def build_tree(root: Path, policy: Policy, paths: list[str] | None = None) -> Tr
         for pattern in language_policy.include
     ]
     files = tuple(
-        sorted(name for name in all_files if any(glob_match(g, name) for g in includes))
+        sorted(
+            name
+            for name in all_files
+            if any(glob_match(g, name) for g in includes) and (root / name).is_file()
+        )
     )
     languages = {
         name: tuple(language_policy.include)

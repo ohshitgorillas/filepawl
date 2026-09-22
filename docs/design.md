@@ -134,7 +134,7 @@ For each file in the include set:
 
 Stale audit, always over the whole allowance table regardless of argv:
 
-- entry names a path outside the tree (`git ls-files` filtered through the include globs): fail, "drop it". An untracked file on disk is outside the tree, which the old scripts' `is_file()` check did not catch;
+- entry names a path outside the tree (`git ls-files` filtered through the include globs, then through existence on disk): fail, "drop it". An untracked file on disk and a tracked file deleted from disk are both outside the tree;
 - entry names a test path: fail;
 - entry names a file now at or under `watch`: fail, "back under watch line";
 - `exempt` names a path not in the tree: fail (config drift).

@@ -233,6 +233,16 @@ def test_build_tree_excludes_untracked_files(
     assert tree.files == ("a.py",)
 
 
+def test_build_tree_excludes_tracked_files_missing_from_disk(
+    repo: Callable[[dict[str, str | int]], Path],
+) -> None:
+    """`git ls-files` still lists a tracked file deleted without `git rm`."""
+    root = repo({"a.py": 3, "gone.py": 3})
+    (root / "gone.py").unlink()
+    tree = build_tree(root, _make_policy())
+    assert tree.files == ("a.py",)
+
+
 def test_build_tree_files_are_posix_relative_and_sorted(
     repo: Callable[[dict[str, str | int]], Path],
 ) -> None:
