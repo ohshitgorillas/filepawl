@@ -333,16 +333,8 @@ def test_init_leaves_pyproject_alone_when_tool_filepawl_is_present(
     assert (root / "pyproject.toml").read_text(encoding="utf-8") == configured
 
 
-# --- mv and no subcommand ----------------------------------------------
-
-
-def test_mv_is_not_implemented_yet(
-    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = repo({"a.py": 10})
-    monkeypatch.chdir(root)
-    assert main(["mv", "a.py", "pkg/a.py"]) == 2
-    assert capsys.readouterr().err == "mv: not implemented\n"
+# --- no subcommand ------------------------------------------------------
+# `mv` itself is covered by tests/test_mv.py.
 
 
 def test_no_subcommand_prints_usage_and_exits_two(

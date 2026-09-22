@@ -1,4 +1,6 @@
-"""Command-line entry point: `check`, `accept`, `init` (design.md §6.4, §7).
+"""Command-line entry point: `check`, `accept`, `init`, `mv` (§6.4, §7).
+
+`mv` lives in `cli_mv.py`; everything else is here.
 
 Every failure path routes through `FilepawlError`, which `main` prints to
 stderr as `filepawl: <message>` and turns into exit 2. Findings are
@@ -57,8 +59,8 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("init", help="write state and a commented policy stub")
 
     mover = subparsers.add_parser("mv", help="move a file and rewrite imports")
-    mover.add_argument("old", nargs="?")
-    mover.add_argument("new", nargs="?")
+    mover.add_argument("old", help="path to move")
+    mover.add_argument("new", help="path to move it to")
 
     return parser
 
@@ -75,8 +77,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             return _init()
         if args.command == "mv":
-            print("mv: not implemented", file=sys.stderr)
-            return 2
+            # Imported here, not at module scope: cli_mv reuses this
+            # module's path normalization, so the dependency runs one way
+            # at import time.
+            from filepawl.cli_mv import run_mv
+
+            return run_mv(args.old, args.new)
     except FilepawlError as exc:
         print(f"filepawl: {exc}", file=sys.stderr)
         return 2

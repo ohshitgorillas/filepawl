@@ -40,6 +40,7 @@ Rationale for cap-only directory gate: the ratchet exists to stop files parking 
 filepawl/
   __init__.py
   cli.py            # argparse: check, accept, init, mv
+  cli_mv.py         # the mv command: language block, mover, stale refs, state
   config.py         # load [tool.filepawl], merge defaults, validate
   state.py          # read/write .filepawl.toml
   tree.py           # git ls-files, include globs, test-path classification
@@ -51,8 +52,9 @@ filepawl/
     registry.py     # built-ins + entry points
   movers/
     __init__.py
-    base.py         # Mover protocol
+    base.py         # Mover protocol, shared stale-reference grep
     rope_mover.py   # optional extra [mv]
+    git_mover.py    # plain `git mv`, the default for a block with no mover
     command.py      # {old}/{new} shell template
     registry.py
 tests/
