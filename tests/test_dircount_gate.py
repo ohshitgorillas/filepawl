@@ -123,6 +123,26 @@ class TestDircountGate:
 
         assert findings == [Finding(path="tests", message="31 files, cap 30")]
 
+    def test_mixed_directory_uses_cap_tests_when_any_file_is_a_test(
+        self, repo: RepoFactory
+    ) -> None:
+        base = default_policy()
+        policy = dataclasses.replace(
+            base,
+            tests=("tests/test_*.py",),
+            dircount=dataclasses.replace(base.dircount, cap=1, cap_tests=5),
+        )
+        files = {
+            "tests/test_a.py": 1,
+            "tests/conftest.py": 1,
+        }
+        root = repo(files)
+        tree = build_tree(root, policy)
+
+        findings = DircountGate().run(tree, policy, State())
+
+        assert findings == []
+
     def test_root_directory_counted(self, repo: RepoFactory) -> None:
         policy = dataclasses.replace(
             default_policy(),

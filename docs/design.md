@@ -143,7 +143,7 @@ Stale audit, always over the whole allowance table regardless of argv:
 
 ### 6.2 Directory-count gate
 
-For each directory that contains at least one include-matched file: count the include-matched files directly in it, minus names in `exclude`. Over `cap` (or `cap_tests` when the directory matches a `tests` glob) fails, naming the directory and the count. Recursion is not counted; subdirectories are their own directories. No state, no ratchet.
+For each directory that contains at least one include-matched file: count the include-matched files directly in it, minus names in `exclude`. Over `cap` (or `cap_tests` when any include-matched file directly in the directory matches a `tests` glob) fails, naming the directory and the count. Recursion is not counted; subdirectories are their own directories. No state, no ratchet.
 
 ### 6.3 Scope of a run
 

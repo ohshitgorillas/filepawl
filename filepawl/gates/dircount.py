@@ -42,7 +42,7 @@ class DircountGate:
         return sorted(findings)
 
     def _cap_for(self, paths: list[str], tree: Tree, policy: Policy) -> int:
-        is_test_dir = all(tree.is_test(path) for path in paths)
+        is_test_dir = any(tree.is_test(path) for path in paths)
         return policy.dircount.cap_tests if is_test_dir else policy.dircount.cap
 
     def accept(self, tree: Tree, policy: Policy, state: State) -> State:
