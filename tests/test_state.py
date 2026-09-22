@@ -118,3 +118,29 @@ def test_load_state_raises_on_non_int_lines(tmp_path: Path) -> None:
     )
     with pytest.raises(StateError):
         load_state(tmp_path)
+
+
+def test_round_trip_preserves_path_containing_equals(tmp_path: Path) -> None:
+    state = State(allowance={"a = b.py": Entry(lines=5)})
+    write_state(tmp_path, state)
+    loaded = load_state(tmp_path)
+    assert loaded == state
+
+
+def test_round_trip_preserves_path_with_quote_and_backslash(tmp_path: Path) -> None:
+    state = State(allowance={'has "quote" and \\backslash.py': Entry(lines=7)})
+    write_state(tmp_path, state)
+    loaded = load_state(tmp_path)
+    assert loaded == state
+
+
+def test_load_state_raises_on_non_int_version(tmp_path: Path) -> None:
+    (tmp_path / ".filepawl.toml").write_text("version = 1.0\n", encoding="utf-8")
+    with pytest.raises(StateError):
+        load_state(tmp_path)
+
+
+def test_load_state_raises_on_bool_version(tmp_path: Path) -> None:
+    (tmp_path / ".filepawl.toml").write_text("version = true\n", encoding="utf-8")
+    with pytest.raises(StateError):
+        load_state(tmp_path)

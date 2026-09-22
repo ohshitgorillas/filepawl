@@ -48,6 +48,8 @@ def load_state(root: Path) -> State:
     version = raw.get("version")
     if version is None:
         raise StateError(f"{path}: missing `version`")
+    if not isinstance(version, int) or isinstance(version, bool):
+        raise StateError(f"{path}: version is not an int: {version!r}")
     if version != _SUPPORTED_VERSION:
         raise StateError(f"{path}: unsupported version {version!r}")
 
@@ -68,7 +70,7 @@ def load_state(root: Path) -> State:
 
 
 def _format_key(name: str) -> str:
-    key, _, _ = tomli_w.dumps({name: 0}).partition(" = ")
+    key, _, _ = tomli_w.dumps({name: 0}).rpartition(" = ")
     return key
 
 
