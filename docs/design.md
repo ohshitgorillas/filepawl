@@ -1,7 +1,7 @@
 # filepawl — design
 
 Date: 2026-09-21
-Status: approved in brainstorming session; implementation plan pending.
+Status: implemented; migration of consumers pending (§10).
 
 ## 1. Purpose
 
