@@ -16,6 +16,7 @@ from filepawl.movers.base import BaseMover, relative_to_root
 
 class GitMover(BaseMover):
     def move(self, old: Path, new: Path, root: Path) -> list[Path]:
+        new.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
             ["git", "mv", relative_to_root(old, root), relative_to_root(new, root)],
             cwd=root,

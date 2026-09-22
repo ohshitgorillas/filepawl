@@ -21,9 +21,11 @@ class RopeMover(BaseMover):
     """`MoveModule` over the project rooted at the repository.
 
     rope's `MoveModule` moves a module into a destination package; it
-    does not rename. `new` therefore has to keep `old`'s basename and
-    name an existing package, and both are refused up front rather than
-    surfacing as a rope traceback.
+    does not rename. `new` therefore has to keep `old`'s basename and sit
+    in a directory that already carries an `__init__.py` (or be the
+    project root, which rope treats as a source folder). Both are refused
+    up front rather than surfacing as a rope traceback, and no directory
+    is created on the way: a destination package is the author's to make.
 
     The project is opened with `ropefolder=None` so no `.ropeproject`
     directory is written into the repository under test.
@@ -44,16 +46,15 @@ class RopeMover(BaseMover):
                 f"{new.name!r} must be {old.name!r}"
             )
         destination = new.parent
-        if not destination.is_dir():
-            raise FilepawlError(f"{relative_to_root(destination, root)}: not a package")
+        folder = relative_to_root(destination, root)
+        at_root = folder in ("", ".")
+        if not at_root and not (destination / "__init__.py").is_file():
+            raise FilepawlError(f"{folder}: not a package")
 
         project = rope.base.project.Project(str(root), ropefolder=None)
         try:
             resource = project.get_resource(relative_to_root(old, root))
-            folder = relative_to_root(destination, root)
-            target = (
-                project.root if folder in ("", ".") else project.get_resource(folder)
-            )
+            target = project.root if at_root else project.get_resource(folder)
             mover = rope.refactor.move.create_move(project, resource)
             changes = mover.get_changes(target)
             changed = [root / change.resource.path for change in changes.changes]

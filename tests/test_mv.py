@@ -110,6 +110,56 @@ def test_command_backend_non_zero_exit_is_a_config_error(
     assert (root / "pkg" / "a.py").exists()
 
 
+def test_command_backend_rejects_an_unknown_placeholder(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repo(
+        {
+            "pyproject.toml": policy(
+                mover="command", mover_command="sh bin/move.sh {other}"
+            ),
+            "pkg/a.py": "X = 1\n",
+        }
+    )
+    monkeypatch.chdir(root)
+
+    assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 2
+
+    err = capsys.readouterr().err
+    assert "sh bin/move.sh {other}" in err
+    assert (root / "pkg" / "a.py").exists()
+
+
+def test_command_backend_shell_quotes_the_paths(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    old = "pkg/odd name $HOME.py"
+    new = "pkg/still odd $x.py"
+    root = repo(
+        {
+            "pyproject.toml": policy(
+                mover="command", mover_command="sh bin/move.sh {old} {new}"
+            ),
+            "pkg/__init__.py": "",
+            old: "X = 1\n",
+        }
+    )
+    (root / "bin").mkdir()
+    (root / "bin" / "move.sh").write_text(
+        'printf "%s\\n" "$@" > "$(dirname "$0")/argv.log"\nmv "$1" "$2"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(root)
+
+    assert main(["mv", old, new]) == 0
+
+    argv = (root / "bin" / "argv.log").read_text(encoding="utf-8").splitlines()
+    assert argv == [old, new]
+    assert (root / new).read_text(encoding="utf-8") == "X = 1\n"
+    assert not (root / old).exists()
+    capsys.readouterr()
+
+
 def test_command_backend_needs_mover_command(
     repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -150,6 +200,20 @@ def test_git_mv_failure_exits_two(
 
     assert main(["mv", "pkg/missing.py", "pkg/other.py"]) == 2
     assert "git mv" in capsys.readouterr().err
+
+
+def test_git_mv_on_an_untracked_old_path_exits_two(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repo({"pyproject.toml": policy(), "pkg/__init__.py": ""})
+    (root / "pkg" / "loose.py").write_text("X = 1\n", encoding="utf-8")
+    monkeypatch.chdir(root)
+
+    assert main(["mv", "pkg/loose.py", "pkg/moved.py"]) == 2
+
+    assert "git mv" in capsys.readouterr().err
+    assert (root / "pkg" / "loose.py").exists()
+    assert not (root / "pkg" / "moved.py").exists()
 
 
 def test_unmatched_old_path_exits_two(
@@ -262,6 +326,46 @@ def test_rope_missing_prints_the_install_line(
 
     assert "pip install 'filepawl[mv]'" in capsys.readouterr().err
     assert (root / "pkg" / "a.py").exists()
+
+
+def test_rope_refuses_a_destination_that_is_not_a_package(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pytest.importorskip("rope")
+    root = repo(
+        {
+            "pyproject.toml": policy(mover="rope"),
+            "pkg/__init__.py": "",
+            "pkg/a.py": "X = 1\n",
+        }
+    )
+    (root / "plain").mkdir()
+    monkeypatch.chdir(root)
+
+    assert main(["mv", "pkg/a.py", "plain/a.py"]) == 2
+
+    assert "plain: not a package" in capsys.readouterr().err
+    assert (root / "pkg" / "a.py").exists()
+    assert not (root / "plain" / "a.py").exists()
+
+
+def test_rope_refuses_a_destination_directory_that_does_not_exist(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pytest.importorskip("rope")
+    root = repo(
+        {
+            "pyproject.toml": policy(mover="rope"),
+            "pkg/__init__.py": "",
+            "pkg/a.py": "X = 1\n",
+        }
+    )
+    monkeypatch.chdir(root)
+
+    assert main(["mv", "pkg/a.py", "pkg/sub/a.py"]) == 2
+
+    assert "pkg/sub: not a package" in capsys.readouterr().err
+    assert not (root / "pkg" / "sub").exists()
 
 
 def test_rope_backend_moves_the_module_and_rewrites_imports(

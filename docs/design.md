@@ -181,7 +181,7 @@ filepawl mv OLD NEW
 
 `filepawl mv OLD NEW`:
 
-1. Resolve the language block whose `include` matches `OLD`; pick its mover. 2. Run the mover. `rope_mover` uses rope's `MoveModule` over the project; `command` renders `mover_command` with `{old}` and `{new}` and runs it via the shell, failing on non-zero exit; no mover means `git mv`. 3. Grep the tree for the old dotted module path and the old relative path as a string (catches `importlib`, `mock.patch("pkg.mod.fn")`, entry points, `pyproject.toml` references). Print hits as leftovers; do not edit them. 4. If the file had an allowance entry, move the entry to the new path. 5. Exit 0 when the move ran, even with leftovers; leftovers are printed and counted so an agent can act on them.
+1. Resolve the language block whose `include` matches `OLD`; pick its mover. 2. Run the mover. `rope_mover` uses rope's `MoveModule` over the project; `command` renders `mover_command` with `{old}` and `{new}` — shell-quoted, since the rendered template goes to a shell — and runs it via the shell, failing on non-zero exit; no mover means `git mv`. 3. Grep the tree for the old dotted module path and the old relative path as a string (catches `importlib`, `mock.patch("pkg.mod.fn")`, entry points, `pyproject.toml` references). Print hits as leftovers; do not edit them. 4. If the file had an allowance entry, move the entry to the new path. 5. Exit 0 when the move ran, even with leftovers; leftovers are printed and counted so an agent can act on them.
 
 Third-party movers register under the `filepawl.movers` entry-point group and are selected by name in `mover =`.
 

@@ -31,10 +31,10 @@ def run_mv(old_arg: str, new_arg: str, stream: TextIO | None = None) -> int:
     language, language_policy = _language_of(policy, old_rel)
     mover = _mover_for(language, language_policy)
 
-    old_path = root / old_rel
-    new_path = root / new_rel
-    new_path.parent.mkdir(parents=True, exist_ok=True)
-    mover.move(old_path, new_path, root)
+    # NEW's parent is not created here: whether a missing destination is
+    # made or refused belongs to the backend. `git mv` and the `command`
+    # template create it; rope requires an existing package and says so.
+    mover.move(root / old_rel, root / new_rel, root)
 
     _report_stale(root, policy, old_rel, out)
     _move_allowance(root, old_rel, new_rel)
