@@ -122,6 +122,16 @@ def _table(state: State) -> dict[str, int]:
     return {path: entry.lines for path, entry in state.allowance.items()}
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "hqptuner excludes .claude/hooks/shell_shapes.py and "
+        "hqptuner/static/store/schema.js from its gate via Makefile and "
+        "pre-commit, not via ALLOWANCE; filepawl has no include-set "
+        "exclusion by owner decision, so init adds two entries; resolved "
+        "at migration"
+    ),
+)
 def test_hqptuner_allowance_reproduced() -> None:
     module = _script_ast(HQPTUNER)
     policy = _policy(
