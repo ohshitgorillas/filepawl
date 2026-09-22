@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -298,3 +300,39 @@ def test_build_tree_tests_globs_carried_from_policy(
     tree = build_tree(root, _make_policy(tests=("tests/**",)))
     assert tree.is_test("tests/test_a.py")
     assert not tree.is_test("a.py")
+
+
+def test_build_tree_raises_config_error_on_non_utf8_filename(tmp_path: Path) -> None:
+    bad_name = b"bad\xff.py"
+    try:
+        decoded_name = os.fsdecode(bad_name)
+    except UnicodeDecodeError:
+        pytest.skip("platform filesystem encoding cannot represent the name")
+
+    bad_path = tmp_path / decoded_name
+    try:
+        bad_path.write_bytes(b"x = 1\n")
+    except OSError:
+        pytest.skip("filesystem refused the non-UTF-8 filename")
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=filepawl tests",
+            "-c",
+            "user.email=filepawl-tests@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "init",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+
+    with pytest.raises(ConfigError) as excinfo:
+        build_tree(tmp_path, _make_policy())
+    assert repr(bad_name) in str(excinfo.value)

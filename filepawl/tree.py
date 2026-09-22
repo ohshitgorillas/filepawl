@@ -129,7 +129,16 @@ def build_tree(root: Path, policy: Policy, paths: list[str] | None = None) -> Tr
         capture_output=True,
         check=True,
     )
-    all_files = [name for name in result.stdout.decode("utf-8").split("\x00") if name]
+    all_files: list[str] = []
+    for raw_name in result.stdout.split(b"\x00"):
+        if not raw_name:
+            continue
+        try:
+            all_files.append(raw_name.decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            raise ConfigError(
+                f"non-UTF-8 filename in `git ls-files`: {raw_name!r}"
+            ) from exc
     includes = [
         pattern
         for language_policy in policy.languages.values()
