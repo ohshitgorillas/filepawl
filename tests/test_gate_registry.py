@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 import types
 from pathlib import Path
 
 import pytest
 
-from filepawl.config import default_policy
+from filepawl.config import NestingPolicy, default_policy
 from filepawl.errors import ConfigError
 from filepawl.gates import registry
 
@@ -46,6 +47,19 @@ def _patch_builtins(monkeypatch: pytest.MonkeyPatch) -> None:
             ("dircount", "fake_dircount_mod", "FakeDircount"),
         ),
     )
+
+
+def test_nesting_disabled_via_policy_nesting_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_module(monkeypatch, "fake_nesting_mod", "FakeNesting", "nesting")
+    monkeypatch.setattr(
+        registry, "_BUILTIN_GATES", (("nesting", "fake_nesting_mod", "FakeNesting"),)
+    )
+    monkeypatch.setattr(registry, "entry_points", lambda group: [])
+    policy = dataclasses.replace(default_policy(), nesting=NestingPolicy(enabled=False))
+
+    assert registry.discover_gates(policy) == []
 
 
 class _FakeEntryPoint:

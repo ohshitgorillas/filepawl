@@ -12,6 +12,7 @@ from filepawl.config import (
     DircountPolicy,
     LanguagePolicy,
     LengthPolicy,
+    NestingPolicy,
     Policy,
     default_policy,
     load_policy,
@@ -67,6 +68,51 @@ class TestBarrelsPolicy:
         )
         with pytest.raises(ConfigError, match="must be a string reason"):
             load_policy(tmp_path)
+
+
+class TestNestingPolicy:
+    def test_defaults(self) -> None:
+        assert default_policy().nesting == NestingPolicy(
+            include=("**/*.py",), max_depth=4, exempt={}, enabled=True
+        )
+
+    def test_table_is_read(self, tmp_path: Path) -> None:
+        write(
+            tmp_path,
+            "[tool.filepawl.nesting]\n"
+            'include = ["pkg/**/*.py"]\n'
+            "max_depth = 3\n"
+            "enabled = false\n"
+            "[tool.filepawl.nesting.exempt]\n"
+            '"pkg/a.py::C.f" = "parser state machine"\n',
+        )
+        policy = load_policy(tmp_path)
+        assert policy.nesting == NestingPolicy(
+            include=("pkg/**/*.py",),
+            max_depth=3,
+            exempt={"pkg/a.py::C.f": "parser state machine"},
+            enabled=False,
+        )
+        assert "nesting" not in policy.gate_tables
+
+    def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
+        write(tmp_path, "[tool.filepawl.nesting]\nmax = 4\n")
+        with pytest.raises(ConfigError, match="unknown key 'max'"):
+            load_policy(tmp_path)
+
+    def test_max_depth_must_be_an_integer(self, tmp_path: Path) -> None:
+        write(tmp_path, '[tool.filepawl.nesting]\nmax_depth = "4"\n')
+        with pytest.raises(ConfigError, match="max_depth must be an integer"):
+            load_policy(tmp_path)
+
+    def test_exemption_reason_must_be_a_string(self, tmp_path: Path) -> None:
+        write(tmp_path, '[tool.filepawl.nesting.exempt]\n"a.py::f" = 1\n')
+        with pytest.raises(ConfigError, match="must be a string reason"):
+            load_policy(tmp_path)
+
+    def test_stub_carries_the_nesting_block(self) -> None:
+        assert "# [tool.filepawl.nesting]" in DEFAULT_POLICY_STUB
+        assert "# max_depth = 4" in DEFAULT_POLICY_STUB
 
 
 class TestDefaultPolicy:

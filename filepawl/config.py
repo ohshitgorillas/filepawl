@@ -14,7 +14,7 @@ from filepawl.errors import ConfigError
 # about third-party entry-point movers config.py has no visibility into.
 KNOWN_MOVERS = ("rope", "command")
 
-_RESERVED_TABLES = ("length", "dircount", "exempt", "barrels")
+_RESERVED_TABLES = ("length", "dircount", "exempt", "barrels", "nesting")
 _TOP_LEVEL_SCALAR_KEYS = ("languages", "tests")
 _LANGUAGE_KEYS = ("include", "mover", "mover_command")
 _LENGTH_KEYS = ("cap", "cap_tests", "watch", "enabled")
@@ -26,6 +26,7 @@ _BARRELS_KEYS = (
     "forwarder_exempt",
     "enabled",
 )
+_NESTING_KEYS = ("include", "max_depth", "exempt", "enabled")
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,14 @@ class BarrelsPolicy:
 
 
 @dataclass(frozen=True)
+class NestingPolicy:
+    include: tuple[str, ...] = ("**/*.py",)
+    max_depth: int = 4
+    exempt: dict[str, str] = field(default_factory=dict)
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
 class Policy:
     languages: dict[str, LanguagePolicy]
     tests: tuple[str, ...]
@@ -69,6 +78,7 @@ class Policy:
     exempt: dict[str, str]
     gate_tables: dict[str, dict[str, object]]
     barrels: BarrelsPolicy = field(default_factory=BarrelsPolicy)
+    nesting: NestingPolicy = field(default_factory=NestingPolicy)
 
 
 def default_policy() -> Policy:
@@ -120,6 +130,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     dircount = _build_dircount(raw.get("dircount"))
     exempt = _build_exempt(raw.get("exempt"))
     barrels = _build_barrels(raw.get("barrels"))
+    nesting = _build_nesting(raw.get("nesting"))
 
     languages = {name: _build_language(name, raw.get(name)) for name in language_names}
 
@@ -141,6 +152,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         exempt=exempt,
         gate_tables=gate_tables,
         barrels=barrels,
+        nesting=nesting,
     )
 
 
@@ -236,6 +248,21 @@ def _build_barrels(table: object) -> BarrelsPolicy:
     )
 
 
+def _build_nesting(table: object) -> NestingPolicy:
+    if table is None:
+        return NestingPolicy()
+    where = "[tool.filepawl.nesting]"
+    if not isinstance(table, dict):
+        raise ConfigError(f"{where} must be a table")
+    _check_keys(table, _NESTING_KEYS, where)
+    return NestingPolicy(
+        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        max_depth=_int(table.get("max_depth", 4), f"{where}.max_depth"),
+        exempt=_build_exempt(table.get("exempt"), "[tool.filepawl.nesting.exempt]"),
+        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+    )
+
+
 def _build_exempt(
     table: object, where: str = "[tool.filepawl.exempt]"
 ) -> dict[str, str]:
@@ -311,6 +338,14 @@ DEFAULT_POLICY_STUB = (
             "[tool.filepawl.barrels.forwarder_exempt]",
             '# "path::function" = reason. Human-edited. A forwarder that is the '
             "right shape.",
+            "",
+            "[tool.filepawl.nesting]",
+            'include = ["**/*.py"]',
+            "max_depth = 4",
+            "",
+            "[tool.filepawl.nesting.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A function that '
+            "nests past the limit on purpose.",
             "",
             "[tool.filepawl.python]",
             'include = ["**/*.py"]',

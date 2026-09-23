@@ -70,5 +70,7 @@ def _is_enabled(name: str, policy: Policy) -> bool:
         return policy.dircount.enabled
     if name == "barrels":
         return policy.barrels.enabled
+    if name == "nesting":
+        return policy.nesting.enabled
     table = policy.gate_tables.get(name, {})
     return table.get("enabled", True) is not False
