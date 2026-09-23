@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `[tool.filepawl.barrels]` policy: `include`, `forwarders`, `module_exempt`,
   `forwarder_exempt`, `enabled`. An exemption that excuses nothing fails.
 - `filepawl init` stub includes the barrels block.
+- Nesting gate: fails a function that nests blocks deeper than the limit.
+- `[tool.filepawl.nesting]` policy: `include`, `max_depth`, `exempt`,
+  `enabled`. An exemption that excuses nothing fails.
+- `filepawl init` stub includes the nesting block.
 
 ### Known limitations
 

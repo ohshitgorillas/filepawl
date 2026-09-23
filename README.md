@@ -155,6 +155,13 @@ forwarders = ["**"]
 [tool.filepawl.barrels.forwarder_exempt]
 # "path::function" = reason. A forwarder that is the right shape after all.
 
+[tool.filepawl.nesting]
+include = ["**/*.py"]
+max_depth = 4
+
+[tool.filepawl.nesting.exempt]
+# "path::qualified.name" = reason. A function that nests past the limit on purpose.
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -200,6 +207,7 @@ configured language.
   names in `exclude`) against `cap` (or `cap_tests`). Not recursive, no
   state, no ratchet.
 - **Barrels gate**: refuses a split that leaves a shell behind. A re-export module (a non-`__init__.py` file of imports that defines nothing) and a trivial forwarder (`def f(self, x): return self._other.f(x)`) both shorten a file without changing any caller. Test paths are skipped; `forwarders` limits where the forwarder rule applies, for trees with thin adapter layers. Exemptions live in policy with a reason, no command writes them, and an exemption that excuses nothing fails. Keyword-argument forwarders and call-rooted chains are not caught.
+- **Nesting gate**: refuses a function that nests blocks deeper than `max_depth` (default 4). A level is an `if`, `for`, `while`, `with`, `try` or `match`; `elif` shares its `if`'s level, and a nested `def` starts its own count. Test paths are checked too. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
 
 The gates, and the mover backends, are registries: a `[tool.filepawl.
 <gate>]` table with `enabled = false` turns a built-in gate off, and
