@@ -8,18 +8,27 @@ rather than restated, so a consumer that retunes one retunes this test.
 
 Each checkout is read and never written: the tree is scanned with
 `git ls-files`, and `accept` runs against an empty in-memory state.
+
+The barrels gate is held to each consumer's own `no-barrels` script: the
+script runs over the file set its Makefile or gate runner hands it, and the
+gate, given the §10 barrels policy, finds the same offenders and the same
+stale exemptions.
 """
 
 from __future__ import annotations
 
 import ast
 import dataclasses
+import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from filepawl.config import LanguagePolicy, Policy, default_policy
+from filepawl.config import BarrelsPolicy, LanguagePolicy, Policy, default_policy
+from filepawl.gates.barrels import BarrelsGate
 from filepawl.gates.length import LengthGate
 from filepawl.state import State
 from filepawl.tree import Tree, build_tree
@@ -160,3 +169,106 @@ def test_gauntlet_allowance_reproduced() -> None:
     tree, state = _accepted(GAUNTLET, policy)
     assert _table(state) == _assigned(module, "ALLOWANCE")
     assert LengthGate().run(tree, policy, state) == []
+
+
+BARREL_SCRIPTS = {
+    HQPTUNER: "scripts/gates/check_no_barrels.py",
+    TRIVIAJUDGE: "scripts/gates/code/check_no_barrels.py",
+    GAUNTLET: "scripts/gates/code/no-barrels.py",
+}
+
+_STALE = re.compile(r"^(?:MODULE|FORWARDER)_EXEMPT\[(.+)\]: ")
+_GATE_STALE = re.compile(r"^\[tool\.filepawl\.barrels\.\w+\] (.+): ")
+
+
+def _barrel_script(root: Path) -> Path:
+    """Locate the consumer's barrels script, skipping when it is absent."""
+    if not (root / ".git").exists():
+        pytest.skip(f"consumer checkout absent: {root}")
+    script = root / BARREL_SCRIPTS[root]
+    if not script.is_file():
+        pytest.skip(f"consumer barrels script absent: {script}")
+    return script
+
+
+def _listed(root: Path, *pathspecs: str) -> list[str]:
+    """The tracked files the consumer hands its script, as its wiring lists them."""
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", *pathspecs],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [name for name in listed.stdout.split("\0") if name]
+
+
+def _split(lines: list[str], stale: re.Pattern[str]) -> tuple[set[str], set[str]]:
+    """Separate offender lines from stale-exemption keys."""
+    offenders: set[str] = set()
+    keys: set[str] = set()
+    for line in lines:
+        match = stale.match(line)
+        if match is not None:
+            keys.add(match.group(1))
+        else:
+            offenders.add(line)
+    return offenders, keys
+
+
+def _script_says(root: Path, script: Path, files: list[str]) -> list[str]:
+    """Run the consumer's script read-only; return its problem lines."""
+    result = subprocess.run(
+        [sys.executable, str(script), *files],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode in (0, 1), result.stderr
+    return [line for line in result.stdout.splitlines() if ": " in line]
+
+
+def _gate_says(root: Path, barrels: BarrelsPolicy) -> list[str]:
+    policy = dataclasses.replace(default_policy(), barrels=barrels)
+    findings = BarrelsGate().run(build_tree(root, policy), policy, State())
+    return [f"{finding.path}: {finding.message}" for finding in findings]
+
+
+def _barrels_agree(root: Path, files: list[str], barrels: BarrelsPolicy) -> None:
+    script = _barrel_script(root)
+    old = _split(_script_says(root, script, files), _STALE)
+    new = _split(
+        [line.removeprefix("pyproject.toml: ") for line in _gate_says(root, barrels)],
+        _GATE_STALE,
+    )
+    assert new == old
+
+
+def test_hqptuner_barrels_reproduced() -> None:
+    module = ast.parse(_barrel_script(HQPTUNER).read_text(encoding="utf-8"))
+    scope = _assigned(module, "FORWARDER_SCOPE")
+    barrels = BarrelsPolicy(
+        include=("hqptuner/**/*.py", "scripts/**/*.py"),
+        forwarders=tuple(f"{prefix}**" for prefix in scope),
+        module_exempt=_assigned(module, "MODULE_EXEMPT"),
+        forwarder_exempt=_assigned(module, "FORWARDER_EXEMPT"),
+    )
+    files = _listed(HQPTUNER, "hqptuner/*.py", "scripts/*.py")
+    _barrels_agree(HQPTUNER, files, barrels)
+
+
+def test_triviajudge_barrels_reproduced() -> None:
+    module = ast.parse(_barrel_script(TRIVIAJUDGE).read_text(encoding="utf-8"))
+    scope = _assigned(module, "FORWARDER_SCOPE")
+    barrels = BarrelsPolicy(
+        include=("triviajudge/**/*.py", "scripts/**/*.py"),
+        forwarders=tuple(f"{prefix}**" for prefix in scope),
+    )
+    files = _listed(TRIVIAJUDGE, "triviajudge/*.py", "scripts/*.py")
+    _barrels_agree(TRIVIAJUDGE, files, barrels)
+
+
+def test_gauntlet_barrels_reproduced() -> None:
+    barrels = BarrelsPolicy(include=("hooks/**/*.py", "scripts/**/*.py"))
+    files = _listed(GAUNTLET, "hooks/*.py", "scripts/*.py")
+    _barrels_agree(GAUNTLET, files, barrels)
