@@ -2,13 +2,7 @@
 
 Keeps code files short: a file-length ratchet plus directory-count, barrel and nesting gates, packaged as one installable CLI.
 
-The idea: a file under a "watch" line is unrestricted. Once it crosses
-that line it needs an allowance entry recording its length, and the
-allowance can only be lowered or dropped, never raised — so a file that
-grows past its recorded length fails until it is split, and one that
-shrinks must have its entry brought down to match. A hard cap still
-blocks any file, watched or not, from growing without bound. A second,
-stateless gate caps how many files sit directly in one directory.
+The idea: a file under a "watch" line is unrestricted. Once it crosses that line it needs an allowance entry recording its length, and the allowance can only be lowered or dropped, never raised — so a file that grows past its recorded length fails until it is split, and one that shrinks must have its entry brought down to match. A hard cap still blocks any file, watched or not, from growing without bound. A second, stateless gate caps how many files sit directly in one directory.
 
 The full design and the decisions behind it are in `docs/design.md`.
 
@@ -43,11 +37,7 @@ filepawl mv OLD NEW
 
 ### `filepawl init`
 
-Run once, at the repository root. Writes `.filepawl.toml` with an
-allowance entry for every file already over the watch line, and — if
-`pyproject.toml` has no `[tool.filepawl]` table yet — appends a commented
-stub showing every policy key and its default, ready to uncomment and
-edit. Refuses to run if `.filepawl.toml` already exists.
+Run once, at the repository root. Writes `.filepawl.toml` with an allowance entry for every file already over the watch line, and — if `pyproject.toml` has no `[tool.filepawl]` table yet — appends a commented stub showing every policy key and its default, ready to uncomment and edit. Refuses to run if `.filepawl.toml` already exists.
 
 ```
 $ filepawl init
@@ -61,10 +51,7 @@ version = 1
 
 ### `filepawl check`
 
-Scans the tree (`git ls-files`, filtered through each language's
-`include` globs) and prints one line per finding, sorted by path. If any
-finding can be fixed by `accept`, the last line is the exact command to
-run.
+Scans the tree (`git ls-files`, filtered through each language's `include` globs) and prints one line per finding, sorted by path. If any finding can be fixed by `accept`, the last line is the exact command to run.
 
 ```
 $ filepawl check
@@ -72,57 +59,35 @@ big.py: over watch line 400 (450 lines); run `filepawl accept big.py`
 filepawl accept big.py
 ```
 
-A `PATH...` argument narrows the length gate's measured set; the stale
-allowance audit and the directory gate always run over the whole tree,
-because a directory's file count is meaningless measured over a subset.
+A `PATH...` argument narrows the length gate's measured set; the stale allowance audit and the directory gate always run over the whole tree, because a directory's file count is meaningless measured over a subset.
 
-Exit codes: `0` clean, `1` one or more findings, `2` a configuration or
-state error (unparseable TOML, unknown key, unknown mover, missing
-`git`).
+Exit codes: `0` clean, `1` one or more findings, `2` a configuration or state error (unparseable TOML, unknown key, unknown mover, missing `git`).
 
 ### `filepawl accept`
 
-Brings `.filepawl.toml` into sync with the current tree: adds an entry
-for a newly-watched file, lowers an entry for a file that shrank, and
-drops entries for files that are gone, no longer tracked, moved into
-`tests/`, or back under the watch line. It never raises an entry — a
-file that grew still fails `check` afterwards, with the same finding, so
-splitting the file is the only way to clear it.
+Brings `.filepawl.toml` into sync with the current tree: adds an entry for a newly-watched file, lowers an entry for a file that shrank, and drops entries for files that are gone, no longer tracked, moved into `tests/`, or back under the watch line. It never raises an entry — a file that grew still fails `check` afterwards, with the same finding, so splitting the file is the only way to clear it.
 
 ```
 $ filepawl accept
 $ filepawl accept src/module.py --reason "parser plus its own tests fixture"
 ```
 
-`--reason` takes exactly one path and attaches a note to that path's
-allowance entry, kept across later `accept` runs that lower the entry.
+`--reason` takes exactly one path and attaches a note to that path's allowance entry, kept across later `accept` runs that lower the entry.
 
 ### `filepawl mv OLD NEW`
 
-Moves a file (or, for Python, a module) and rewrites the imports that
-reference it, using whichever mover backend the matching `[tool.filepawl.
-<language>]` block names — `rope` for Python, a `command` template
-rendered with `{old}`/`{new}` and run through the shell, or plain `git
-mv` when no mover is configured. Afterwards it greps the tree for the old
-dotted module path and the old relative path as a literal string
-(catching `importlib`, `mock.patch("pkg.mod.fn")`, entry points and
-`pyproject.toml` references), prints any hits with `path:line: text`
-without editing them, and moves the file's allowance entry to the new
-path if it had one.
+Moves a file (or, for Python, a module) and rewrites the imports that reference it, using whichever mover backend the matching `[tool.filepawl.<language>]` block names — `rope` for Python, a `command` template rendered with `{old}`/`{new}` and run through the shell, or plain `git mv` when no mover is configured. Afterwards it greps the tree for the old dotted module path and the old relative path as a literal string (catching `importlib`, `mock.patch("pkg.mod.fn")`, entry points and `pyproject.toml` references), prints any hits with `path:line: text` without editing them, and moves the file's allowance entry to the new path if it had one.
 
 ```
 $ filepawl mv src/old_name.py src/pkg/new_name.py
 0 stale references
 ```
 
-Exits 0 whenever the move itself ran, even with leftover references —
-they are printed and counted so an agent (or a person) can act on them.
+Exits 0 whenever the move itself ran, even with leftover references — they are printed and counted so an agent (or a person) can act on them.
 
 ## Configuration
 
-Policy lives in `pyproject.toml` under `[tool.filepawl]`; every key is
-optional and the defaults are what `filepawl init` writes as a commented
-stub:
+Policy lives in `pyproject.toml` under `[tool.filepawl]`; every key is optional and the defaults are what `filepawl init` writes as a commented stub:
 
 ```toml
 [tool.filepawl]
@@ -170,15 +135,11 @@ mover = "command"
 mover_command = "npx jscodeshift -t scripts/move.js --old {old} --new {new} src/"
 ```
 
-State — the allowance table itself — lives in `.filepawl.toml` at the
-repository root, is committed, and is owned by the CLI: it is rewritten
-wholesale by `accept` and `init`, and hand edits are lost on the next
-run.
+State — the allowance table itself — lives in `.filepawl.toml` at the repository root, is committed, and is owned by the CLI: it is rewritten wholesale by `accept` and `init`, and hand edits are lost on the next run.
 
 ## Pre-commit
 
-This repository ships `.pre-commit-hooks.yaml`, so a consumer can point
-at it directly:
+This repository ships `.pre-commit-hooks.yaml`, so a consumer can point at it directly:
 
 ```yaml
 repos:
@@ -188,29 +149,15 @@ repos:
       - id: filepawl
 ```
 
-The hook runs `filepawl check` over the whole tree on every commit
-(`pass_filenames: false`, `always_run: true`); one hook covers every
-configured language.
+The hook runs `filepawl check` over the whole tree on every commit (`pass_filenames: false`, `always_run: true`); one hook covers every configured language.
 
 ## Gates, briefly
 
-- **Length gate**: hard cap (`cap`, or `cap_tests` under a `tests` glob),
-  a `watch` line above which a file needs an allowance entry, and a
-  stale-entry audit that catches allowances for files that are gone,
-  untracked, moved into tests, or shrunk back under the watch line.
-  `exempt` in policy lifts the hard cap only — the entry and ratchet
-  still apply.
-- **Directory-count gate**: for each directory holding at least one
-  matched file, counts the matched files directly in it (excluding
-  names in `exclude`) against `cap` (or `cap_tests`). Not recursive, no
-  state, no ratchet.
+- **Length gate**: hard cap (`cap`, or `cap_tests` under a `tests` glob), a `watch` line above which a file needs an allowance entry, and a stale-entry audit that catches allowances for files that are gone, untracked, moved into tests, or shrunk back under the watch line. `exempt` in policy lifts the hard cap only — the entry and ratchet still apply.
+- **Directory-count gate**: for each directory holding at least one matched file, counts the matched files directly in it (excluding names in `exclude`) against `cap` (or `cap_tests`). Not recursive, no state, no ratchet.
 - **Barrels gate**: refuses a split that leaves a shell behind. A re-export module (a non-`__init__.py` file of imports that defines nothing) and a trivial forwarder (`def f(self, x): return self._other.f(x)`) both shorten a file without changing any caller. Test paths are skipped; `forwarders` limits where the forwarder rule applies, for trees with thin adapter layers. Exemptions live in policy with a reason, no command writes them, and an exemption that excuses nothing fails. Keyword-argument forwarders and call-rooted chains are not caught.
 - **Nesting gate**: refuses a function that nests blocks deeper than `max_depth` (default 4). A level is an `if`, `for`, `while`, `with`, `try` or `match`; `elif` shares its `if`'s level, and a nested `def` starts its own count. Test paths are checked too. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
 
-The gates, and the mover backends, are registries: a `[tool.filepawl.
-<gate>]` table with `enabled = false` turns a built-in gate off, and
-third parties can add their own gate or mover under the
-`filepawl.gates` / `filepawl.movers` entry-point groups.
+The gates, and the mover backends, are registries: a `[tool.filepawl.<gate>]` table with `enabled = false` turns a built-in gate off, and third parties can add their own gate or mover under the `filepawl.gates` / `filepawl.movers` entry-point groups.
 
-See `docs/design.md` for the exact semantics — line counting, the stale
-conditions, and the rationale for each decision.
+See `docs/design.md` for the exact semantics — line counting, the stale conditions, and the rationale for each decision.
