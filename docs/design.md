@@ -12,6 +12,7 @@ filepawl extracts the engine into one installable package with:
 - a CLI, so agents mutate ratchet state through commands rather than editing a table by hand;
 - policy separated from state;
 - a second gate against flat directory structure (files per directory, cap only);
+- a third gate against splits that leave a shell behind (re-export modules and trivial forwarders), extracted from the `no-barrels` script the three repositories also each carry;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own.
 
@@ -31,6 +32,10 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), a Claud
 | Python floor | 3.12 (`tomllib` in stdlib; consumers declare `>=3.12` or nothing) |
 | Teaching agents | `check` failure output prints the exact `filepawl accept` command; one line in each consumer `CLAUDE.md` |
 | Architecture | gate registry (A): each gate is a class; built-ins plus `filepawl.gates` entry points |
+| Barrels gate | built-in, enabled by default, Python only (`ast`); rules ported unwidened from the three `no-barrels` scripts |
+| Barrels file set | tree files matched by the gate's own `include`, minus test paths; whole tree every run |
+| Barrels forwarder scope | `forwarders` globs, default every checked file; a repository with thin adapter layers narrows it |
+| Barrels exemptions | live in policy, human-edited, with a reason; no command writes them, and a stale one fails |
 
 Rationale for cap-only directory gate: the ratchet exists to stop files parking against the cap because trimming two lines is always cheaper than splitting. Moving a file into a subpackage is cheap (tool-assisted import rewrite), so the crawl dynamic does not apply to directories.
 
@@ -49,6 +54,7 @@ filepawl/
     base.py         # Gate protocol, Finding dataclass
     length.py       # cap + ratchet
     dircount.py     # files-per-directory cap
+    barrels.py      # re-export modules and trivial forwarders
     registry.py     # built-ins + entry points
   movers/
     __init__.py
@@ -88,6 +94,17 @@ exclude = ["__init__.py"]
 # path = reason. Human-edited. Exempts from the hard cap only; the file still
 # needs an allowance entry and may not grow.
 # "scripts/junkcal_fixture.py" = "junkcal fixture oracle, provenance kept whole"
+
+[tool.filepawl.barrels]
+include = ["**/*.py"]
+forwarders = ["**"]
+
+[tool.filepawl.barrels.module_exempt]
+# path = reason. Human-edited. A module that defines nothing on purpose.
+
+[tool.filepawl.barrels.forwarder_exempt]
+# "path::function" = reason. Human-edited. A forwarder that is the right shape.
+# "hqptuner/presets/presetops.py::park_filter" = "reaches the private filter park"
 
 [tool.filepawl.python]
 include = ["**/*.py"]
@@ -149,7 +166,7 @@ For each directory that contains at least one include-matched file: count the in
 
 ### 6.3 Scope of a run
 
-`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit and the directory gate always run over the whole tree, because a directory count over a subset is meaningless.
+`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate and the barrels gate always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
 
 `.pre-commit-hooks.yaml` declares the hook with `pass_filenames: false` and `always_run: true`: one hook covers every language, where HQPTuner today needs a `types: [python]` hook and a `types: [javascript]` hook and checks CSS only from `make`. The whole-tree run is one `git ls-files` plus a line count per file, so nothing is saved by narrowing it.
 
@@ -160,6 +177,26 @@ One line per finding: `path: message`. Findings sorted by path. If any finding i
 ### 6.5 Gate registry
 
 `Gate` protocol: `name: str`; `run(tree, policy, state) -> list[Finding]`; `accept(tree, policy, state) -> state` (identity for stateless gates). `Finding` carries `path`, `message`, `fixable_by_accept: bool`. Built-ins register in `gates/registry.py`; third parties register under the `filepawl.gates` entry-point group. All discovered gates run on every `check`; a `[tool.filepawl.<gate>]` table with `enabled = false` disables one.
+
+### 6.6 Barrels gate
+
+A split moves code. It does not leave a shell behind that points at where the code went. Both shapes below make a file shorter without making the tree simpler, and both read as a completed split to the length gate. The tell they share is that no caller changed. That is not directly checkable, so the gate checks the two syntactic shapes it comes in.
+
+Checked files: tree files matched by `[tool.filepawl.barrels] include`, minus test paths. Each is parsed with `ast` from `utf-8` text. A file that does not parse is a finding, `does not parse: <error>`.
+
+Re-export module: a module whose body carries an `import` or `from ... import` statement and defines nothing. Defining something means a function, an async function, a class, or an assignment at module level other than to `__all__`. A module whose logic sits only under `if __name__ == "__main__":` defines nothing. `__init__.py` is never a re-export module, since re-exporting a package's surface is its job. Finding: `path: imports and defines nothing — a re-export module is not a split`.
+
+Trivial forwarder, checked only in files matched by a `forwarders` glob: a function or method, at any nesting depth, whose body, after an optional leading docstring, is a single `return` of a call, seen through one `await`. The callee is an attribute chain rooted at a plain name, and the call passes exactly the function's positional parameters, in order, as bare names, with no keywords and no starred arguments. When the chain is rooted at the first parameter, that parameter is spent on the chain and is not expected among the arguments. Finding: `path::function: returns a call on its own arguments — move the callers, not the method`.
+
+The rules are not widened. A forwarder that passes an argument by keyword and one whose chain is rooted in a call (`self.require_http().restore(x)`) are not caught. Catching them cost more false positives than the hits were worth in the three source repositories, and review catches them.
+
+Exemptions live in policy with a reason. `module_exempt` keys are paths; `forwarder_exempt` keys are `path::function`. The audit covers every entry on every run and reports each finding under path `pyproject.toml`:
+
+- an entry whose path is not a checked file: `names no file`;
+- a `module_exempt` entry whose module is not a re-export module: `the module defines something, so it needs no exemption`;
+- a `forwarder_exempt` entry naming no forwarder in its file: `matches no forwarder`. The forwarder test here ignores `forwarders` scope, as the source scripts do.
+
+No barrels finding is fixable by `accept`, and `accept` leaves state unchanged.
 
 ## 7. CLI
 
@@ -190,6 +227,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Unit tests per gate on synthetic trees built in `tmp_path` with a real `git init` so `git ls-files` behaviour is exercised.
 - Port the scenario coverage from the three existing suites: HQPTuner 33 pytest cases, Trivia Judge 16 pytest cases, Gauntlet 19 cases inside one hand-rolled `self_test()` that must be rewritten as pytest: cap pass/fail at both limits, watch-line entry required, grow fails, shrink fails, exact match passes, each stale condition, exempt file at cap and growing, multiple offenders reported together, test files exempt from ratchet.
 - Directory gate: at cap, over cap, `__init__.py` excluded, nested directories counted separately, tests cap applied.
+- Barrels gate: port the cases of HQPTuner's `tests/gates/test_no_barrels.py`, Trivia Judge's `tests/gates/test_check_no_barrels.py` and Gauntlet's `no_barrels_selftest.py`. Scope cases are expressed through `forwarders`, and exemption cases through policy. The acceptance test runs each consumer's script read-only over its own file set and compares its findings with the gate's.
 - `accept`: adds, lowers, refuses to raise, drops stale, preserves reason, stable sort.
 - `init`: fresh tree, refuses overwrite, appends policy stub once.
 - `mv`: `command` backend with a fake script; `rope` backend behind `pytest.importorskip("rope")`; stale-ref grep finds a `mock.patch` string.
@@ -200,7 +238,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 
 Per repository, one PR:
 
-1. Add `filepawl` to dev dependencies (git URL pinned to a tag) and a pre-commit entry `repo: https://github.com/ohshitgorillas/filepawl`, `rev: vX.Y.Z`, hook `filepawl`. 2. Write `[tool.filepawl]` in `pyproject.toml` only where the repository departs from defaults: HQPTuner adds a `javascript` block and the `junkcal_fixture.py` exemption; Gauntlet adds `**/*.sh` to `include`. 3. Run `filepawl init`. Existing `ALLOWANCE` values need no import: the old ratchet already forced exact equality with current lengths, so `init` reproduces them. Carry Trivia Judge's per-entry comments over with `filepawl accept <path> --reason "..."`. 4. Run `filepawl check`; expect clean. Directory gate may surface new findings; those are decided per repository, not silently exempted. 5. Delete the old script, its tests, and its Makefile / pre-commit / gate-runner wiring. Replace the CONTRIBUTING and CLAUDE.md prose with one line pointing at `filepawl check` and `filepawl accept`.
+1. Add `filepawl` to dev dependencies (git URL pinned to a tag) and a pre-commit entry `repo: https://github.com/ohshitgorillas/filepawl`, `rev: vX.Y.Z`, hook `filepawl`. 2. Write `[tool.filepawl]` in `pyproject.toml` only where the repository departs from defaults: HQPTuner adds a `javascript` block and the `junkcal_fixture.py` exemption; Gauntlet adds `**/*.sh` to `include`. For the barrels gate, HQPTuner sets `include` to `hqptuner/**/*.py` and `scripts/**/*.py`, `forwarders` to its `core`, `lanes`, `presets`, `engine` and `conf` packages, and carries its two `presetops.py` forwarder exemptions over with their reasons. Trivia Judge sets `include` and `forwarders` to `triviajudge/**` and `scripts/**`. Gauntlet sets `include` to `hooks/**/*.py` and `scripts/**/*.py`. Gauntlet's script also reads untracked files, and filepawl does not. 3. Run `filepawl init`. Existing `ALLOWANCE` values need no import: the old ratchet already forced exact equality with current lengths, so `init` reproduces them. Carry Trivia Judge's per-entry comments over with `filepawl accept <path> --reason "..."`. 4. Run `filepawl check`; expect clean. Directory gate may surface new findings; those are decided per repository, not silently exempted. 5. Delete the old length and barrels scripts, their tests, and their Makefile / pre-commit / gate-runner wiring. Replace the CONTRIBUTING and CLAUDE.md prose with one line pointing at `filepawl check` and `filepawl accept`.
 
 ## 11. Open items deferred
 

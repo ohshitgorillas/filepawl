@@ -130,6 +130,15 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 
 `README.md`: install, policy, commands, agent teaching line, migration pointer. Confirm `make check`'s `filepawl check` runs default policy on own tree clean, `pre-commit run --all-files` green. Reconcile `docs/design.md` status line (`implementation plan pending` → implemented) and any §3 layout drift caused by splits, in the same commit.
 
+### Phase 6 — barrels gate (spec §6.6)
+
+- **6a `docs: barrels gate spec`**: `docs/design.md` §1, §2, §3, §4, §6.3, §6.6, §9, §10; `CLAUDE.md` ported-behavior list; this phase.
+- **6b `feat: barrels policy`**: `BarrelsPolicy` in `filepawl/config.py` (`enabled`, `include`, `forwarders`, `module_exempt`, `forwarder_exempt`), `barrels` reserved, registry `_is_enabled` branch; tests in `tests/test_config.py`.
+- **6c `feat: barrels gate`**: `filepawl/gates/barrels.py`, registered third among built-ins; tests in `tests/test_barrels_gate.py`.
+- **6d `test: port barrels cases`**: the three suites named in `CLAUDE.md`, one file per consumer, each case citing its source.
+- **6e `test: barrels consumer acceptance`**: `tests/test_consumers.py`, marker `consumers`; the old script and the gate agree on each checkout.
+- **6f `docs: barrels in README and changelog`**.
+
 ## Verification (orchestrator, end)
 
 ```

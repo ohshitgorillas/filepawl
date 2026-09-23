@@ -16,6 +16,12 @@ The length gate and the ratchet are extractions, not inventions. Where the spec 
 - `~/dev/triviajudge/scripts/gates/check_file_length.py`, tests `~/dev/triviajudge/tests/gates/test_check_file_length.py`
 - `~/dev/gauntlet/scripts/gates/file-length.py`, cases in `~/dev/gauntlet/scripts/gates/file_length_selftest.py`
 
+The barrels gate is an extraction the same way, from:
+
+- `~/dev/hqptuner/scripts/gates/check_no_barrels.py`, tests `~/dev/hqptuner/tests/gates/test_no_barrels.py`
+- `~/dev/triviajudge/scripts/gates/code/check_no_barrels.py`, tests `~/dev/triviajudge/tests/gates/test_check_no_barrels.py`
+- `~/dev/gauntlet/scripts/gates/code/no-barrels.py`, cases in `~/dev/gauntlet/scripts/gates/code/no_barrels_selftest.py`
+
 Where the three disagree, the spec's decisions table rules; where it too is silent, the disagreement goes to the owner with the three behaviors quoted.
 
 The acceptance test for the port is `filepawl init` reproducing each consumer's current `ALLOWANCE` table exactly, run read-only against each checkout. A difference is a defect in filepawl until proven otherwise; it is never fixed by editing the consumer.
