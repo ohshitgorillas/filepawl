@@ -22,6 +22,12 @@ The barrels gate is an extraction the same way, from:
 - `~/dev/triviajudge/scripts/gates/code/check_no_barrels.py`, tests `~/dev/triviajudge/tests/gates/test_check_no_barrels.py`
 - `~/dev/gauntlet/scripts/gates/code/no-barrels.py`, cases in `~/dev/gauntlet/scripts/gates/code/no_barrels_selftest.py`
 
+The nesting gate is an extraction the same way, from:
+
+- `~/dev/hqptuner/scripts/gates/check_nesting.py`, tests `~/dev/hqptuner/tests/gates/test_nesting.py`
+- `~/dev/triviajudge/scripts/gates/code/check_nesting.py`, tests `~/dev/triviajudge/tests/gates/test_check_nesting.py`
+- `~/dev/gauntlet/scripts/gates/code/nesting.py`, cases in `~/dev/gauntlet/scripts/gates/code/nesting_selftest.py`
+
 Where the three disagree, the spec's decisions table rules; where it too is silent, the disagreement goes to the owner with the three behaviors quoted.
 
 

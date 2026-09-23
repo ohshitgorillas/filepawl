@@ -138,6 +138,14 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **6d `test: port barrels cases`**: the three suites named in `CLAUDE.md`, one file per consumer, each case citing its source.
 - **6f `docs: barrels in README and changelog`**.
 
+### Phase 7 — nesting gate (spec §6.7)
+
+- **7a `docs: nesting gate spec`**: `docs/design.md` §1, §2, §3, §4, §6.3, §6.7, §9, §10; `CLAUDE.md` ported-behavior list; this phase.
+- **7b `feat: nesting policy`**: `NestingPolicy` in `filepawl/config.py` (`enabled`, `include`, `max_depth`, `exempt`), `nesting` reserved, registry `_is_enabled` branch, policy stub; tests in `tests/test_config.py`.
+- **7c `feat: nesting gate`**: `filepawl/gates/nesting.py`, registered fourth among built-ins; tests in `tests/test_nesting_gate.py`.
+- **7d `test: port nesting cases`**: the three suites named in `CLAUDE.md`, one file per consumer, each case citing its source.
+- **7e `docs: nesting in README and changelog`**.
+
 ## Verification (orchestrator, end)
 
 ```
