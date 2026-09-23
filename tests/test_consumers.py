@@ -27,10 +27,16 @@ from typing import Any
 
 import pytest
 
-from filepawl.config import BarrelsPolicy, LanguagePolicy, Policy, default_policy
+from filepawl.config import (
+    BarrelsPolicy,
+    LanguagePolicy,
+    Policy,
+    default_policy,
+    load_policy,
+)
 from filepawl.gates.barrels import BarrelsGate
 from filepawl.gates.length import LengthGate
-from filepawl.state import State
+from filepawl.state import STATE_FILE, State, load_state
 from filepawl.tree import Tree, build_tree
 
 pytestmark = pytest.mark.consumers
@@ -43,7 +49,7 @@ GAUNTLET = DEV / "gauntlet"
 SCRIPTS = {
     HQPTUNER: "scripts/gates/check_file_length.py",
     TRIVIAJUDGE: "scripts/gates/check_file_length.py",
-    GAUNTLET: "scripts/gates/file-length.py",
+    GAUNTLET: "scripts/gates/code/file-length.py",
 }
 
 
@@ -156,11 +162,14 @@ def test_hqptuner_allowance_reproduced() -> None:
 
 
 def test_triviajudge_allowance_reproduced() -> None:
-    module = _script_ast(TRIVIAJUDGE)
-    policy = _policy(module)
+    """Trivia Judge has migrated: its committed `.filepawl.toml` is the table."""
+    if not (TRIVIAJUDGE / STATE_FILE).is_file():
+        pytest.skip(f"consumer state file absent: {TRIVIAJUDGE / STATE_FILE}")
+    policy = load_policy(TRIVIAJUDGE)
+    committed = load_state(TRIVIAJUDGE)
     tree, state = _accepted(TRIVIAJUDGE, policy)
-    assert _table(state) == _assigned(module, "ALLOWANCE")
-    assert LengthGate().run(tree, policy, state) == []
+    assert _table(state) == _table(committed)
+    assert LengthGate().run(tree, policy, committed) == []
 
 
 def test_gauntlet_allowance_reproduced() -> None:

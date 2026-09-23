@@ -559,7 +559,13 @@ def test_module_exemption_naming_a_package_init_fails(repo: RepoFactory) -> None
     root = repo({"hqptuner/core/__init__.py": BARREL})
     path = "hqptuner/core/__init__.py"
     findings = _run(root, _policy(module_exempt={path: "the package surface"}))
-    assert [f.path for f in findings] == ["pyproject.toml"]
+    assert findings == [
+        Finding(
+            "pyproject.toml",
+            f"[tool.filepawl.barrels.module_exempt] {path!r}: "
+            "the module defines something, so it needs no exemption",
+        )
+    ]
 
 
 def test_module_exemption_naming_a_package_init_is_named(repo: RepoFactory) -> None:
