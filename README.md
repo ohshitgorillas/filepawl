@@ -1,8 +1,6 @@
 # filepawl
 
-A file-length ratchet and a directory-count gate, packaged as one
-installable CLI. It replaces three hand-rolled copies of the same script
-that had drifted across HQPTuner, Gauntlet and Trivia Judge.
+Keeps code files short: a file-length ratchet plus directory-count, barrel and nesting gates, packaged as one installable CLI.
 
 The idea: a file under a "watch" line is unrestricted. Once it crosses
 that line it needs an allowance entry recording its length, and the
