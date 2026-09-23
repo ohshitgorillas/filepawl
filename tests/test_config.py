@@ -8,6 +8,7 @@ import pytest
 
 from filepawl.config import (
     DEFAULT_POLICY_STUB,
+    BarrelsPolicy,
     DircountPolicy,
     LanguagePolicy,
     LengthPolicy,
@@ -20,6 +21,52 @@ from filepawl.errors import ConfigError
 
 def write(root: Path, text: str) -> None:
     (root / "pyproject.toml").write_text(text, encoding="utf-8")
+
+
+class TestBarrelsPolicy:
+    def test_defaults(self) -> None:
+        assert default_policy().barrels == BarrelsPolicy(
+            include=("**/*.py",),
+            forwarders=("**",),
+            module_exempt={},
+            forwarder_exempt={},
+            enabled=True,
+        )
+
+    def test_table_is_read(self, tmp_path: Path) -> None:
+        write(
+            tmp_path,
+            "[tool.filepawl.barrels]\n"
+            'include = ["pkg/**/*.py"]\n'
+            'forwarders = ["pkg/core/**"]\n'
+            "enabled = false\n"
+            "[tool.filepawl.barrels.module_exempt]\n"
+            '"pkg/shim.py" = "entry point name"\n'
+            "[tool.filepawl.barrels.forwarder_exempt]\n"
+            '"pkg/core/a.py::f" = "facade"\n',
+        )
+        policy = load_policy(tmp_path)
+        assert policy.barrels == BarrelsPolicy(
+            include=("pkg/**/*.py",),
+            forwarders=("pkg/core/**",),
+            module_exempt={"pkg/shim.py": "entry point name"},
+            forwarder_exempt={"pkg/core/a.py::f": "facade"},
+            enabled=False,
+        )
+        assert "barrels" not in policy.gate_tables
+
+    def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
+        write(tmp_path, "[tool.filepawl.barrels]\nscope = []\n")
+        with pytest.raises(ConfigError, match="unknown key 'scope'"):
+            load_policy(tmp_path)
+
+    def test_exemption_reason_must_be_a_string(self, tmp_path: Path) -> None:
+        write(
+            tmp_path,
+            "[tool.filepawl.barrels.forwarder_exempt]\n" '"a.py::f" = 1\n',
+        )
+        with pytest.raises(ConfigError, match="must be a string reason"):
+            load_policy(tmp_path)
 
 
 class TestDefaultPolicy:

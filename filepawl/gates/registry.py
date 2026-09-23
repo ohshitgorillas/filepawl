@@ -20,6 +20,7 @@ _ENTRY_POINT_GROUP = "filepawl.gates"
 _BUILTIN_GATES: tuple[tuple[str, str, str], ...] = (
     ("length", "filepawl.gates.length", "LengthGate"),
     ("dircount", "filepawl.gates.dircount", "DircountGate"),
+    ("barrels", "filepawl.gates.barrels", "BarrelsGate"),
 )
 
 _GATE_ATTRS = ("name", "run", "accept")
@@ -67,5 +68,7 @@ def _is_enabled(name: str, policy: Policy) -> bool:
         return policy.length.enabled
     if name == "dircount":
         return policy.dircount.enabled
+    if name == "barrels":
+        return policy.barrels.enabled
     table = policy.gate_tables.get(name, {})
     return table.get("enabled", True) is not False

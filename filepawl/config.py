@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from filepawl.errors import ConfigError
@@ -14,11 +14,18 @@ from filepawl.errors import ConfigError
 # about third-party entry-point movers config.py has no visibility into.
 KNOWN_MOVERS = ("rope", "command")
 
-_RESERVED_TABLES = ("length", "dircount", "exempt")
+_RESERVED_TABLES = ("length", "dircount", "exempt", "barrels")
 _TOP_LEVEL_SCALAR_KEYS = ("languages", "tests")
 _LANGUAGE_KEYS = ("include", "mover", "mover_command")
 _LENGTH_KEYS = ("cap", "cap_tests", "watch", "enabled")
 _DIRCOUNT_KEYS = ("cap", "cap_tests", "exclude", "enabled")
+_BARRELS_KEYS = (
+    "include",
+    "forwarders",
+    "module_exempt",
+    "forwarder_exempt",
+    "enabled",
+)
 
 
 @dataclass(frozen=True)
@@ -45,6 +52,15 @@ class DircountPolicy:
 
 
 @dataclass(frozen=True)
+class BarrelsPolicy:
+    include: tuple[str, ...] = ("**/*.py",)
+    forwarders: tuple[str, ...] = ("**",)
+    module_exempt: dict[str, str] = field(default_factory=dict)
+    forwarder_exempt: dict[str, str] = field(default_factory=dict)
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
 class Policy:
     languages: dict[str, LanguagePolicy]
     tests: tuple[str, ...]
@@ -52,6 +68,7 @@ class Policy:
     dircount: DircountPolicy
     exempt: dict[str, str]
     gate_tables: dict[str, dict[str, object]]
+    barrels: BarrelsPolicy = field(default_factory=BarrelsPolicy)
 
 
 def default_policy() -> Policy:
@@ -102,6 +119,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     length = _build_length(raw.get("length"))
     dircount = _build_dircount(raw.get("dircount"))
     exempt = _build_exempt(raw.get("exempt"))
+    barrels = _build_barrels(raw.get("barrels"))
 
     languages = {name: _build_language(name, raw.get(name)) for name in language_names}
 
@@ -122,6 +140,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         dircount=dircount,
         exempt=exempt,
         gate_tables=gate_tables,
+        barrels=barrels,
     )
 
 
@@ -197,15 +216,37 @@ def _build_dircount(table: object) -> DircountPolicy:
     )
 
 
-def _build_exempt(table: object) -> dict[str, str]:
+def _build_barrels(table: object) -> BarrelsPolicy:
+    if table is None:
+        return BarrelsPolicy()
+    where = "[tool.filepawl.barrels]"
+    if not isinstance(table, dict):
+        raise ConfigError(f"{where} must be a table")
+    _check_keys(table, _BARRELS_KEYS, where)
+    return BarrelsPolicy(
+        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        forwarders=_str_list(table.get("forwarders", ["**"]), f"{where}.forwarders"),
+        module_exempt=_build_exempt(
+            table.get("module_exempt"), "[tool.filepawl.barrels.module_exempt]"
+        ),
+        forwarder_exempt=_build_exempt(
+            table.get("forwarder_exempt"), "[tool.filepawl.barrels.forwarder_exempt]"
+        ),
+        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+    )
+
+
+def _build_exempt(
+    table: object, where: str = "[tool.filepawl.exempt]"
+) -> dict[str, str]:
     if table is None:
         return {}
     if not isinstance(table, dict):
-        raise ConfigError("[tool.filepawl.exempt] must be a table")
+        raise ConfigError(f"{where} must be a table")
     result: dict[str, str] = {}
     for key, value in table.items():
         if not isinstance(value, str):
-            raise ConfigError(f"[tool.filepawl.exempt].{key!r} must be a string reason")
+            raise ConfigError(f"{where}.{key!r} must be a string reason")
         result[key] = value
     return result
 

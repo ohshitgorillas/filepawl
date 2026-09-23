@@ -182,7 +182,7 @@ One line per finding: `path: message`. Findings sorted by path. If any finding i
 
 A split moves code. It does not leave a shell behind that points at where the code went. Both shapes below make a file shorter without making the tree simpler, and both read as a completed split to the length gate. The tell they share is that no caller changed. That is not directly checkable, so the gate checks the two syntactic shapes it comes in.
 
-Checked files: tree files matched by `[tool.filepawl.barrels] include`, minus test paths. Each is parsed with `ast` from `utf-8` text. A file that does not parse is a finding, `does not parse: <error>`.
+Checked files: tree files matched by `[tool.filepawl.barrels] include`, minus test paths. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped: syntax is the compiler's gate, and a file that does not parse has no shape to judge.
 
 Re-export module: a module whose body carries an `import` or `from ... import` statement and defines nothing. Defining something means a function, an async function, a class, or an assignment at module level other than to `__all__`. A module whose logic sits only under `if __name__ == "__main__":` defines nothing. `__init__.py` is never a re-export module, since re-exporting a package's surface is its job. Finding: `path: imports and defines nothing — a re-export module is not a split`.
 
