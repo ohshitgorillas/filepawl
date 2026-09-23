@@ -301,6 +301,17 @@ DEFAULT_POLICY_STUB = (
             '# "scripts/junkcal_fixture.py" = "junkcal fixture oracle, '
             'provenance kept whole"',
             "",
+            "[tool.filepawl.barrels]",
+            'include = ["**/*.py"]',
+            'forwarders = ["**"]',
+            "",
+            "[tool.filepawl.barrels.module_exempt]",
+            "# path = reason. Human-edited. A module that defines nothing on purpose.",
+            "",
+            "[tool.filepawl.barrels.forwarder_exempt]",
+            '# "path::function" = reason. Human-edited. A forwarder that is the '
+            "right shape.",
+            "",
             "[tool.filepawl.python]",
             'include = ["**/*.py"]',
             'mover = "rope"',

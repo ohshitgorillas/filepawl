@@ -145,6 +145,16 @@ exclude = ["__init__.py"]
 # path = reason. Exempts from the hard cap only; the file still needs an
 # allowance entry and may not grow.
 
+[tool.filepawl.barrels]
+include = ["**/*.py"]
+forwarders = ["**"]
+
+[tool.filepawl.barrels.module_exempt]
+# path = reason. A module that defines nothing on purpose.
+
+[tool.filepawl.barrels.forwarder_exempt]
+# "path::function" = reason. A forwarder that is the right shape after all.
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -189,8 +199,9 @@ configured language.
   matched file, counts the matched files directly in it (excluding
   names in `exclude`) against `cap` (or `cap_tests`). Not recursive, no
   state, no ratchet.
+- **Barrels gate**: refuses a split that leaves a shell behind. A re-export module (a non-`__init__.py` file of imports that defines nothing) and a trivial forwarder (`def f(self, x): return self._other.f(x)`) both shorten a file without changing any caller. Test paths are skipped; `forwarders` limits where the forwarder rule applies, for trees with thin adapter layers. Exemptions live in policy with a reason, no command writes them, and an exemption that excuses nothing fails. Keyword-argument forwarders and call-rooted chains are not caught.
 
-Both gates, and the mover backends, are registries: a `[tool.filepawl.
+The gates, and the mover backends, are registries: a `[tool.filepawl.
 <gate>]` table with `enabled = false` turns a built-in gate off, and
 third parties can add their own gate or mover under the
 `filepawl.gates` / `filepawl.movers` entry-point groups.

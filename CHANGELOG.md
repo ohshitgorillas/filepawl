@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Barrels gate: fails a re-export module (a file other than `__init__.py`
+  that imports and defines nothing) and a trivial forwarder (a function that
+  only returns a call on its own arguments).
+- `[tool.filepawl.barrels]` policy: `include`, `forwarders`, `module_exempt`,
+  `forwarder_exempt`, `enabled`. An exemption that excuses nothing fails.
+- `filepawl init` stub includes the barrels block.
+
+### Known limitations
+
+- Barrels gate misses forwarders that pass an argument by keyword and
+  forwarders whose call chain starts with a call.
+
 ## 0.1.0 - 2026-09-21
 
 ### Added
