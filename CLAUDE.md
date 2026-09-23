@@ -24,7 +24,6 @@ The barrels gate is an extraction the same way, from:
 
 Where the three disagree, the spec's decisions table rules; where it too is silent, the disagreement goes to the owner with the three behaviors quoted.
 
-The acceptance test for the port is `filepawl init` reproducing each consumer's current `ALLOWANCE` table exactly, run read-only against each checkout. A difference is a defect in filepawl until proven otherwise; it is never fixed by editing the consumer.
 
 ## Consumer repositories are read-only
 
@@ -32,7 +31,7 @@ The acceptance test for the port is `filepawl init` reproducing each consumer's 
 
 ## Tests
 
-Every behavior is written test-first: a red test in `tests/`, then the code that turns it green, in the same commit. Tests run on synthetic trees under `tmp_path` with a real `git init`; a test that stubs `git ls-files` tests nothing this package does. No test reads a consumer checkout except the acceptance test above, which is marked `consumers` and skipped when a checkout is absent.
+Every behavior is written test-first: a red test in `tests/`, then the code that turns it green, in the same commit. Tests run on synthetic trees under `tmp_path` with a real `git init`; a test that stubs `git ls-files` tests nothing this package does. No test reads a consumer checkout.
 
 No test waits on a wall clock.
 

@@ -136,7 +136,6 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **6b `feat: barrels policy`**: `BarrelsPolicy` in `filepawl/config.py` (`enabled`, `include`, `forwarders`, `module_exempt`, `forwarder_exempt`), `barrels` reserved, registry `_is_enabled` branch; tests in `tests/test_config.py`.
 - **6c `feat: barrels gate`**: `filepawl/gates/barrels.py`, registered third among built-ins; tests in `tests/test_barrels_gate.py`.
 - **6d `test: port barrels cases`**: the three suites named in `CLAUDE.md`, one file per consumer, each case citing its source.
-- **6e `test: barrels consumer acceptance`**: `tests/test_consumers.py`, marker `consumers`; the old script and the gate agree on each checkout.
 - **6f `docs: barrels in README and changelog`**.
 
 ## Verification (orchestrator, end)
