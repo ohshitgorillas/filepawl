@@ -1,9 +1,5 @@
 # filepawl — design
 
-Date: 2026-09-21
-
-Status: implemented; migration of consumers pending (§10).
-
 ## 1. Purpose
 
 Three repositories (HQPTuner, Gauntlet, Trivia Judge) each carry a hand-rolled copy of one Python script: a file-length cap plus a one-way ratchet on files above a watch line. The copies share a core and have drifted at the edges (`CAP_EXEMPT`, `--check`, `git ls-files` default, per-entry comments, JS/CSS coverage). Every fix is made three times. The ratchet state (`ALLOWANCE`, `CAP_EXEMPT`) lives inside the script, so an engine fix must be hand-merged around per-repository state.
@@ -13,8 +9,8 @@ filepawl extracts the engine into one installable package with:
 - a CLI, so agents mutate ratchet state through commands rather than editing a table by hand;
 - policy separated from state;
 - a second gate against flat directory structure (files per directory, cap only);
-- a third gate against splits that leave a shell behind (re-export modules and trivial forwarders), extracted from the `no-barrels` script the three repositories also each carry;
-- a fourth gate against functions that nest blocks too deep, extracted from the `nesting` script the three repositories also each carry;
+- a third gate against splits that leave a shell behind (re-export modules and trivial forwarders);
+- a fourth gate against functions that nest blocks too deep;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own;
 - a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap, and stops an edit that grows a file over its cap.
@@ -35,7 +31,7 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Python floor | 3.12 (`tomllib` in stdlib; consumers declare `>=3.12` or nothing) |
 | Teaching agents | `check` failure output prints the exact `filepawl accept` command; one line in each consumer `CLAUDE.md` |
 | Architecture | gate registry (A): each gate is a class; built-ins plus `filepawl.gates` entry points |
-| Barrels gate | built-in, enabled by default, Python only (`ast`); rules ported unwidened from the three `no-barrels` scripts |
+| Barrels gate | built-in, enabled by default, Python only (`ast`); rules not widened |
 | Barrels file set | tree files matched by the gate's own `include`, minus test paths; whole tree every run |
 | Barrels forwarder scope | `forwarders` globs, default every checked file; a repository with thin adapter layers narrows it |
 | Barrels exemptions | live in policy, human-edited, with a reason; no command writes them, and a stale one fails |
@@ -214,7 +210,7 @@ Re-export module: a module whose body carries an `import` or `from ... import` s
 
 Trivial forwarder, checked only in files matched by a `forwarders` glob: a function or method, at any nesting depth, whose body, after an optional leading docstring, is a single `return` of a call, seen through one `await`. The callee is an attribute chain rooted at a plain name, and the call passes exactly the function's positional parameters, in order, as bare names, with no keywords and no starred arguments. When the chain is rooted at the first parameter, that parameter is spent on the chain and is not expected among the arguments. Finding: `path::function: returns a call on its own arguments — move the callers, not the method`.
 
-The rules are not widened. A forwarder that passes an argument by keyword and one whose chain is rooted in a call (`self.require_http().restore(x)`) are not caught. Catching them cost more false positives than the hits were worth in the three source repositories, and review catches them.
+The rules are not widened. A forwarder that passes an argument by keyword and one whose chain is rooted in a call (`self.require_http().restore(x)`) are not caught. Catching them cost more false positives than the hits were worth, and review catches them.
 
 Exemptions live in policy with a reason. `module_exempt` keys are paths; `forwarder_exempt` keys are `path::function`. The audit covers every entry on every run and reports each finding under path `pyproject.toml`:
 
