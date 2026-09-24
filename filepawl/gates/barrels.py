@@ -1,8 +1,7 @@
 """Barrels gate: re-export modules and trivial forwarders (design.md §6.6).
 
 A split moves code; it does not leave a shell behind pointing at where the
-code went. Ported from the `no-barrels` script HQPTuner, Trivia Judge and
-Gauntlet each carry; the rules are not widened.
+code went.
 """
 
 from __future__ import annotations

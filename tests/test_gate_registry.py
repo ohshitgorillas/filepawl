@@ -15,8 +15,8 @@ from filepawl.gates import registry
 
 
 class _StubGate:
-    """A gate double with a fixed name, used to test ordering/enable logic
-    without depending on the real built-in gates' internals."""
+    """A gate with a fixed name that lets registry ordering and enable logic
+    be tested independent of the built-in gates."""
 
     def __init__(self, name: str) -> None:
         self.name = name

@@ -1,9 +1,7 @@
 """Nesting gate: no function nests blocks past a depth limit (design.md §6.7).
 
 Cyclomatic complexity counts branches, not indentation, so a deeply nested
-but branch-cheap function passes ruff `C901` and is still unreadable. Ported
-from the `nesting` script HQPTuner, Trivia Judge and Gauntlet each carry; the
-rules are not widened.
+but branch-cheap function passes ruff `C901` and is still unreadable.
 """
 
 from __future__ import annotations

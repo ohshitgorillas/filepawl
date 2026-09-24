@@ -21,9 +21,9 @@ if TYPE_CHECKING:
 def glob_match(pattern: str, path: str) -> bool:
     """Match a posix-relative path against a `pyproject.toml` include glob.
 
-    Written by hand-translating the pattern to a regex (no `fnmatch`, no
-    `pathlib.match`) so that `**` can mean "zero or more path segments,
-    including dot-directories" and a bare `*` never crosses `/`.
+    Translates the pattern to its own regex rather than using `fnmatch`
+    or `pathlib.match`. `**` matches zero or more path segments,
+    including dot-directories, and a bare `*` never crosses `/`.
     """
     regex = _translate(pattern)
     return re.fullmatch(regex, path) is not None
