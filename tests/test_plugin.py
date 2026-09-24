@@ -12,7 +12,9 @@ PLUGIN = REPO / "plugin"
 SCRIPT = PLUGIN / "hooks" / "filepawl-hook.sh"
 
 
-def run_script(project: Path, path_dirs: list[Path]) -> subprocess.CompletedProcess[str]:
+def run_script(
+    project: Path, path_dirs: list[Path]
+) -> subprocess.CompletedProcess[str]:
     env = {
         "CLAUDE_PROJECT_DIR": str(project),
         "PATH": os.pathsep.join([*map(str, path_dirs), "/usr/bin", "/bin"]),
