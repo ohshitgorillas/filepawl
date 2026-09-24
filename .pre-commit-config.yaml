@@ -3,6 +3,14 @@ repos:
     rev: HEAD
     hooks:
       - id: filepawl
+  - repo: https://github.com/ohshitgorillas/triviajudge
+    rev: v0.7.0
+    hooks:
+      - id: archaeology
+        types: [python]
+      - id: md-trivia
+      - id: comment-trivia
+      - id: changelog-trivia
   - repo: local
     hooks:
       - id: ruff

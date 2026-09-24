@@ -43,7 +43,7 @@ No test waits on a wall clock.
 
 ## Gates
 
-`make check` is the bar and is green before every commit: `ruff check`, `black --check`, `mypy --strict filepawl`, `pytest -q`, and `filepawl check` over this tree with default policy. Pre-commit runs the same gates, and the repository's `.pre-commit-config.yaml` consumes `.pre-commit-hooks.yaml` from this checkout so the hook definition is exercised by its own commits.
+`make check` is the bar and is green before every commit: `ruff check`, `black --check`, `mypy --strict filepawl`, `pytest -q`, and `filepawl check` over this tree with default policy. Pre-commit runs the same gates plus the four triviajudge gates over the prose a commit adds, and the repository's `.pre-commit-config.yaml` consumes `.pre-commit-hooks.yaml` from this checkout so the hook definition is exercised by its own commits.
 
 Self-application is a gate, not a courtesy. filepawl's own tree carries no `exempt` entry and, by intent, no allowance entry: a module here that crosses the watch line is split, and a case where splitting is wrong goes to the owner before `accept` is run on this tree.
 
