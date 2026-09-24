@@ -1,0 +1,13 @@
+{
+  "name": "filepawl",
+  "owner": {
+    "name": "Atom"
+  },
+  "plugins": [
+    {
+      "name": "filepawl",
+      "source": "./plugin",
+      "description": "Edit-time notice for filepawl's length ratchet."
+    }
+  ]
+}
