@@ -31,20 +31,51 @@ def run_hook(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> str | None:
-    """Run `filepawl hook` on a payload; return the notice, or None when silent."""
+    """Run `filepawl hook` on a payload; return the notice, or None when silent.
+
+    Fails when the hook denies the edit instead.
+    """
+    specific = hook_output(payload, monkeypatch, capsys)
+    if specific is None:
+        return None
+    assert "permissionDecision" not in specific
+    return strip_prefix(specific["additionalContext"])
+
+
+def run_hook_denied(
+    payload: object,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> str:
+    """Run `filepawl hook` on a payload it must deny; return the reason."""
+    specific = hook_output(payload, monkeypatch, capsys)
+    assert specific is not None
+    assert specific["permissionDecision"] == "deny"
+    assert "additionalContext" not in specific
+    return strip_prefix(specific["permissionDecisionReason"])
+
+
+def hook_output(
+    payload: object,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> dict[str, object] | None:
     text = payload if isinstance(payload, str) else json.dumps(payload)
     monkeypatch.setattr("sys.stdin", io.StringIO(text))
     assert main(["hook"]) == 0
     out = capsys.readouterr().out
     if out == "":
         return None
-    decoded = json.loads(out)
-    specific = decoded["hookSpecificOutput"]
+    specific = json.loads(out)["hookSpecificOutput"]
+    assert isinstance(specific, dict)
     assert specific["hookEventName"] == "PreToolUse"
-    context = specific["additionalContext"]
-    assert isinstance(context, str)
-    assert context.startswith("filepawl: ")
-    return context.removeprefix("filepawl: ")
+    return specific
+
+
+def strip_prefix(text: object) -> str:
+    assert isinstance(text, str)
+    assert text.startswith("filepawl: ")
+    return text.removeprefix("filepawl: ")
 
 
 def write(root: Path, path: str, content: str) -> dict[str, object]:
@@ -122,17 +153,50 @@ def test_edit_crossing_the_watch_line_names_the_ratchet(
     )
 
 
-def test_over_cap_adds_the_cap_sentence(
+def test_edit_growing_a_file_over_its_cap_is_denied(
     repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = repo({"a.py": CAP})
     with_allowance(root, "a.py", CAP)
-    notice = run_hook(edit(root, "a.py", "line 1\n", lines(3)), monkeypatch, capsys)
-    assert notice == (
-        f"a.py: in the length ratchet at {CAP} lines; this edit takes it "
-        f"{CAP} → {CAP + 2}. 2 lines over the allowance; split them out before "
-        f"committing. Over cap {CAP}; split it before committing. {DELEGATE}"
+    reason = run_hook_denied(
+        edit(root, "a.py", "line 1\n", lines(3)), monkeypatch, capsys
     )
+    assert reason == (
+        f"a.py: this edit takes it {CAP} → {CAP + 2} lines, over cap {CAP}; "
+        "blocked. Split the file first; the split is mechanical and can be "
+        "delegated."
+    )
+
+
+def test_write_creating_a_file_over_its_cap_is_denied(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repo({"a.py": 1})
+    reason = run_hook_denied(write(root, "new.py", lines(CAP + 1)), monkeypatch, capsys)
+    assert reason.startswith(f"new.py: this edit takes it 0 → {CAP + 1} lines")
+
+
+def test_over_cap_file_that_shrinks_gets_the_cap_sentence(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repo({"a.py": CAP + 10})
+    with_allowance(root, "a.py", CAP + 10)
+    notice = run_hook(edit(root, "a.py", "line 1\n", ""), monkeypatch, capsys)
+    assert notice == (
+        f"a.py: in the length ratchet at {CAP + 10} lines; this edit takes it "
+        f"{CAP + 10} → {CAP + 9}. It may shrink, never grow past {CAP + 10}. "
+        f"Over cap {CAP}; split it before committing. {DELEGATE}"
+    )
+
+
+def test_over_cap_file_that_keeps_its_length_is_not_denied(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repo({"a.py": CAP + 10})
+    with_allowance(root, "a.py", CAP + 10)
+    notice = run_hook(edit(root, "a.py", "line 1\n", "one\n"), monkeypatch, capsys)
+    assert notice is not None
+    assert f"Over cap {CAP}; split it before committing." in notice
 
 
 def test_exempt_path_gets_no_cap_sentence(
@@ -159,16 +223,46 @@ def test_write_creating_an_untracked_file_is_projected(
     assert notice.startswith(f"new.py: goes 0 → {WATCH + 5} lines, over watch line")
 
 
-def test_test_file_over_its_cap(
+def test_test_file_growing_over_its_cap_is_denied(
     repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = repo({"tests/test_a.py": CAP_TESTS})
-    notice = run_hook(
+    reason = run_hook_denied(
         edit(root, "tests/test_a.py", "line 1\n", lines(2)), monkeypatch, capsys
     )
+    assert reason.startswith(
+        f"tests/test_a.py: this edit takes it {CAP_TESTS} → {CAP_TESTS + 1} "
+        f"lines, over cap {CAP_TESTS}; blocked."
+    )
+
+
+def test_test_file_over_its_cap_that_shrinks(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repo({"tests/test_a.py": CAP_TESTS + 5})
+    notice = run_hook(
+        edit(root, "tests/test_a.py", "line 1\n", ""), monkeypatch, capsys
+    )
     assert notice == (
-        f"tests/test_a.py: test file goes {CAP_TESTS} → {CAP_TESTS + 1} lines, "
-        f"over cap {CAP_TESTS}; split it before committing."
+        f"tests/test_a.py: test file goes {CAP_TESTS + 5} → {CAP_TESTS + 4} "
+        f"lines, over cap {CAP_TESTS}; split it before committing."
+    )
+
+
+def test_exempt_test_file_growing_over_its_cap_is_not_denied(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repo(
+        {
+            "tests/test_a.py": CAP_TESTS,
+            "pyproject.toml": '[tool.filepawl.exempt]\n"tests/test_a.py" = "oracle"\n',
+        }
+    )
+    assert (
+        run_hook(
+            edit(root, "tests/test_a.py", "line 1\n", lines(2)), monkeypatch, capsys
+        )
+        is None
     )
 
 
@@ -190,12 +284,12 @@ def test_test_file_over_watch_is_silent(
 def test_replace_all_replaces_every_occurrence(
     repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = repo({"a.py": "x\n" * WATCH})
+    root = repo({"a.py": "x\n" * 10 + lines(WATCH - 10)})
     notice = run_hook(
         edit(root, "a.py", "x\n", "x\ny\n", replace_all=True), monkeypatch, capsys
     )
     assert notice is not None
-    assert f"goes {WATCH} → {2 * WATCH} lines" in notice
+    assert f"goes {WATCH} → {WATCH + 10} lines" in notice
 
 
 def test_edit_without_replace_all_replaces_once(

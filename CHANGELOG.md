@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
-- `filepawl hook`: reads a Claude Code `PreToolUse` payload, projects the edited file's length, and tells the agent when the edit puts the file over the watch line, past its allowance or over a cap. It never blocks and always exits 0.
+- `filepawl hook`: reads a Claude Code `PreToolUse` payload, projects the edited file's length, and tells the agent when the edit puts the file over the watch line, past its allowance or over a cap. An edit that grows a non-exempt file to over its cap is denied. It always exits 0.
 - Claude Code plugin marketplace with a `filepawl` plugin that runs `filepawl hook` before `Write`, `Edit` and `MultiEdit`.
 
 ## 0.2.0 - 2026-09-23

@@ -1,15 +1,16 @@
 """The `hook` command: an edit-time notice for Claude Code (docs/design.md §7.1).
 
-Reads one `PreToolUse` payload on stdin, projects the edited file's length
-after the edit, and prints a notice as hook JSON when that length puts the
-file in the ratchet or over a cap. It advises and never blocks: every path,
-malformed input and configuration errors included, returns 0, and anything
-it cannot judge is silent. `check` stays the gate.
+Reads one `PreToolUse` payload on stdin and projects the edited file's
+length after the edit. An edit that grows a non-exempt file to over its cap
+is denied; any other edit that leaves the file in the ratchet or over a cap
+gets a notice. Every path, malformed input and configuration errors
+included, returns 0, and anything the hook cannot judge is silent.
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
@@ -22,20 +23,28 @@ _TOOLS = ("Write", "Edit", "MultiEdit")
 _DELEGATE = "Plan the split now; it is mechanical and can be delegated."
 
 
+@dataclass(frozen=True)
+class _Verdict:
+    text: str
+    deny: bool = False
+
+
 def run_hook(stdin: TextIO, stdout: TextIO) -> int:
-    notice = _notice(stdin.read())
-    if notice is not None:
-        output = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "additionalContext": f"filepawl: {notice}",
-            }
-        }
-        print(json.dumps(output, ensure_ascii=False), file=stdout)
+    verdict = _verdict(stdin.read())
+    if verdict is None:
+        return 0
+    specific: dict[str, str] = {"hookEventName": "PreToolUse"}
+    if verdict.deny:
+        specific["permissionDecision"] = "deny"
+        specific["permissionDecisionReason"] = f"filepawl: {verdict.text}"
+    else:
+        specific["additionalContext"] = f"filepawl: {verdict.text}"
+    output = {"hookSpecificOutput": specific}
+    print(json.dumps(output, ensure_ascii=False), file=stdout)
     return 0
 
 
-def _notice(raw: str) -> str | None:
+def _verdict(raw: str) -> _Verdict | None:
     try:
         payload = json.loads(raw)
     except ValueError:
@@ -75,7 +84,7 @@ def _notice(raw: str) -> str | None:
     if after is None:
         return None
 
-    return _message(path, policy, state.allowance, len(before.splitlines()), after)
+    return _judge(path, policy, state.allowance, len(before.splitlines()), after)
 
 
 def _included(policy: Policy, path: str) -> bool:
@@ -113,19 +122,39 @@ def _apply(edit: object, text: str) -> str | None:
     return text.replace(old, new, count)
 
 
-def _message(
+def _judge(
+    path: str, policy: Policy, allowance: dict[str, Entry], before: int, after: int
+) -> _Verdict | None:
+    length = policy.length
+    is_test = any(glob_match(pattern, path) for pattern in policy.tests)
+    exempt = path in policy.exempt
+    cap = length.cap_tests if is_test else length.cap
+    if not exempt and after > cap and after > before:
+        return _Verdict(
+            text=(
+                f"{path}: this edit takes it {before} → {after} lines, over cap "
+                f"{cap}; blocked. Split the file first; the split is mechanical "
+                "and can be delegated."
+            ),
+            deny=True,
+        )
+
+    if is_test:
+        if exempt or after <= cap:
+            return None
+        return _Verdict(
+            f"{path}: test file goes {before} → {after} lines, over cap "
+            f"{cap}; split it before committing."
+        )
+
+    message = _ratchet_message(path, policy, allowance, before, after)
+    return None if message is None else _Verdict(message)
+
+
+def _ratchet_message(
     path: str, policy: Policy, allowance: dict[str, Entry], before: int, after: int
 ) -> str | None:
     length = policy.length
-    is_test = any(glob_match(pattern, path) for pattern in policy.tests)
-    if is_test:
-        if after <= length.cap_tests:
-            return None
-        return (
-            f"{path}: test file goes {before} → {after} lines, over cap "
-            f"{length.cap_tests}; split it before committing."
-        )
-
     if after <= length.watch:
         return None
     entry = allowance.get(path)

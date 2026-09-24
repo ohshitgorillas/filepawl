@@ -87,7 +87,7 @@ Exits 0 whenever the move itself ran, even with leftover references — they are
 
 ### `filepawl hook`
 
-Reads one Claude Code `PreToolUse` payload on stdin and, for a `Write`, `Edit` or `MultiEdit`, works out how long the file will be after the edit. When that length is over the watch line, or over a cap, it prints hook JSON whose `additionalContext` tells the agent where the file stands: its allowance, how far this edit takes it past that allowance, and that the split can be planned now and delegated. Under the watch line it prints nothing. It never blocks an edit and always exits 0; `filepawl check` stays the gate.
+Reads one Claude Code `PreToolUse` payload on stdin and, for a `Write`, `Edit` or `MultiEdit`, works out how long the file will be after the edit. When that length is over the watch line, or over a cap, it prints hook JSON whose `additionalContext` tells the agent where the file stands: its allowance, how far this edit takes it past that allowance, and that the split can be planned now and delegated. Under the watch line it prints nothing. An edit that grows a file to over its cap (`cap_tests` for a test) is denied instead, unless the path is exempt: the cap fails `filepawl check` anyway, and denying the edit moves that failure to the moment it happens. An edit that leaves an already over-cap file no longer than it was goes through with a notice, so such a file can be split a piece at a time. The command always exits 0.
 
 ```
 filepawl: pkg/big.py: in the length ratchet at 450 lines; this edit takes it 450 → 458. 8 lines over the allowance; split them out before committing. Plan the split now; it is mechanical and can be delegated.

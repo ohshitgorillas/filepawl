@@ -17,7 +17,7 @@ filepawl extracts the engine into one installable package with:
 - a fourth gate against functions that nest blocks too deep, extracted from the `nesting` script the three repositories also each carry;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own;
-- a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap.
+- a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap, and stops an edit that grows a file over its cap.
 
 Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI publication.
 
@@ -43,7 +43,7 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Nesting file set | tree files matched by the gate's own `include`, test paths included; whole tree every run |
 | Nesting limit | `max_depth`, default 4, the limit all three scripts hold |
 | Nesting exemptions | live in policy, per function, human-edited, with a reason; no command writes them, and a stale one fails |
-| Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload and adds context naming the file's standing after the edit; it never blocks, and `check` stays the gate |
+| Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload; it denies an edit that grows a file to over its cap, and warns on any other edit that leaves the file over the watch line or a cap |
 | Plugin | a Claude Code marketplace in this repository with one plugin under `plugin/`; its hook runs the consumer's installed `filepawl`, not a bundled copy |
 
 Rationale for cap-only directory gate: the ratchet exists to stop files parking against the cap because trimming two lines is always cheaper than splitting. Moving a file into a subpackage is cheap (tool-assisted import rewrite), so the crawl dynamic does not apply to directories.
@@ -273,17 +273,19 @@ The length gate fails at commit time. An agent that learns only then that a file
 
 The file need not be tracked: a `Write` that creates a file is projected like any other. A path matched by no language `include` is ignored, as is any path when the length gate is disabled.
 
-A notice is emitted when the projected length puts the file in the ratchet or over a cap:
+An edit is denied when the projected length B is over the file's cap (`cap_tests` for a test path, `cap` otherwise), the path is not exempt, and B exceeds A, the length before the edit. The reason reads `path: this edit takes it A → B lines, over cap C; blocked. Split the file first; the split is mechanical and can be delegated.`
 
-- Test path, over `cap_tests`: `path: test file goes A → B lines, over cap C_T; split it before committing.`
+Otherwise a notice is emitted when the projected length puts the file in the ratchet or over a cap:
+
+- Test path, not exempt, over `cap_tests`: `path: test file goes A → B lines, over cap C_T; split it before committing.`
 - Non-test path over `watch` with an allowance entry: `path: in the length ratchet at N lines; this edit takes it A → B.` followed by `B − N lines over the allowance; split them out before committing.` when B exceeds N, and otherwise `It may shrink, never grow past N.`
 - Non-test path over `watch` with no entry: `path: goes A → B lines, over watch line W; it enters the length ratchet on the next \`filepawl accept\` and may only shrink after that.`
 - Either non-test case, when B exceeds `cap` and the path is not exempt, adds `Over cap C; split it before committing.`
 - Every non-test notice ends `Plan the split now; it is mechanical and can be delegated.`
 
-A is the length before the edit, 0 for a file that does not exist. The notice goes to stdout as `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "filepawl: <notice>"}}`. No notice means no output.
+A is 0 for a file that does not exist, so a `Write` that creates a file over its cap is denied. The notice goes to stdout as `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "filepawl: <notice>"}}` and a denial as `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "filepawl: <reason>"}}`. Neither means no output.
 
-The hook advises and never denies. A split in progress passes through states the gate would fail, such as a function present in both the old and the new module, and denying those writes would block the split itself. `check` at commit stays the gate. Every outcome exits 0: a malformed payload, a directory outside any repository, a policy or state error, an unreadable file, and an `old_string` that does not occur are all silent. `check` reports the configuration errors, and Claude Code reports the failed edit.
+The cap is a hard gate at commit, so denying growth past it moves that failure to the edit that causes it. The ratchet band only warns: a split in progress passes through states the ratchet would fail, such as a function present in both the old and the new module, and denying those writes would block the split itself. A split never needs to grow a file over its cap, because the new modules start empty and the original only shrinks. An edit that leaves an over-cap file over its cap but no longer is let through with a notice, so a file already over its cap after adoption or a lowered cap can be split a piece at a time. Every outcome exits 0: a malformed payload, a directory outside any repository, a policy or state error, an unreadable file, and an `old_string` that does not occur are all silent. `check` reports the configuration errors, and Claude Code reports the failed edit.
 
 The plugin under `plugin/` wires this hook for `Write|Edit|MultiEdit`. Its script runs `$CLAUDE_PROJECT_DIR/.venv/bin/filepawl hook` when that file is executable, otherwise `filepawl hook` from `PATH`, and exits 0 silently when neither exists, so the notice always comes from the consumer's pinned filepawl. The script exits 0 whatever filepawl returns, because a `PreToolUse` hook exiting 2 blocks the edit.
 
@@ -308,7 +310,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - `init`: fresh tree, refuses overwrite, appends policy stub once.
 - `mv`: `command` backend with a fake script; `rope` backend behind `pytest.importorskip("rope")`; stale-ref grep finds a `mock.patch` string.
 - Registry: an entry-point gate and mover discovered from a test-installed distribution.
-- `hook`: each notice form; projection for `Write`, `Edit`, `replace_all` and `MultiEdit`; an untracked new file; silence under the watch line, for other tools, for paths outside every `include`, and on every error path; exit 0 throughout. The plugin script: exits 0 and prints nothing when no filepawl is found, and exits 0 when filepawl exits 2.
+- `hook`: denial of growth over `cap` and `cap_tests`, including a new file; no denial for an exempt path or an over-cap file that does not grow; each notice form; projection for `Write`, `Edit`, `replace_all` and `MultiEdit`; an untracked new file; silence under the watch line, for other tools, for paths outside every `include`, and on every error path; exit 0 throughout. The plugin script: exits 0 and prints nothing when no filepawl is found, and exits 0 when filepawl exits 2.
 - Self-application: filepawl's own tree passes `filepawl check` with default policy; the repository's pre-commit runs it.
 
 ## 10. Migration of the three consumers

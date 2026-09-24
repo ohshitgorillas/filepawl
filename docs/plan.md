@@ -152,6 +152,7 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`feat: hook command`**: `filepawl/hook.py`, `hook` subcommand in `filepawl/cli.py`; tests in `tests/test_hook.py`.
 - **`feat: claude code plugin`**: `.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json`, `plugin/hooks/hooks.json`, `plugin/hooks/filepawl-hook.sh`; tests in `tests/test_plugin.py`.
 - **`docs: hook in README and changelog`**: `README.md`, `CHANGELOG.md`, version 0.3.0 in `pyproject.toml` and `plugin.json`.
+- **`feat: deny edits that grow a file over its cap`**: `docs/design.md` §2, §7.1, §9; `filepawl/hook.py`; `tests/test_hook.py`; `plugin/hooks/filepawl-hook.sh` comment; `README.md`; `CHANGELOG.md`.
 
 ## Verification (orchestrator, end)
 
