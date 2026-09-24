@@ -1,6 +1,6 @@
-"""Command-line entry point: `check`, `accept`, `init`, `mv` (§6.4, §7).
+"""Command-line entry point: `check`, `accept`, `init`, `mv`, `hook` (§6.4, §7).
 
-`mv` lives in `cli_mv.py`; everything else is here.
+`mv` lives in `cli_mv.py` and `hook` in `hook.py`; everything else is here.
 
 Every failure path routes through `FilepawlError`, which `main` prints to
 stderr as `filepawl: <message>` and turns into exit 2. Findings are
@@ -62,6 +62,8 @@ def _build_parser() -> argparse.ArgumentParser:
     mover.add_argument("old", help="path to move")
     mover.add_argument("new", help="path to move it to")
 
+    subparsers.add_parser("hook", help="edit-time notice for a Claude Code hook")
+
     return parser
 
 
@@ -83,6 +85,10 @@ def main(argv: list[str] | None = None) -> int:
             from filepawl.cli_mv import run_mv
 
             return run_mv(args.old, args.new)
+        if args.command == "hook":
+            from filepawl.hook import run_hook
+
+            return run_hook(sys.stdin, sys.stdout)
     except FilepawlError as exc:
         print(f"filepawl: {exc}", file=sys.stderr)
         return 2
