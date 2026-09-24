@@ -146,6 +146,13 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **7d `test: port nesting cases`**: the three suites named in `CLAUDE.md`, one file per consumer, each case citing its source.
 - **7e `docs: nesting in README and changelog`**.
 
+### Phase 8 — edit-time notice and plugin (spec §7.1)
+
+- **`docs: edit-time notice spec`**: `docs/design.md` §1, §2, §3, §7, §7.1, §9, §11; this phase.
+- **`feat: hook command`**: `filepawl/hook.py`, `hook` subcommand in `filepawl/cli.py`; tests in `tests/test_hook.py`.
+- **`feat: claude code plugin`**: `.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json`, `plugin/hooks/hooks.json`, `plugin/hooks/filepawl-hook.sh`; tests in `tests/test_plugin.py`.
+- **`docs: hook in README and changelog`**: `README.md`, `CHANGELOG.md`, version 0.3.0 in `pyproject.toml` and `plugin.json`.
+
 ## Verification (orchestrator, end)
 
 ```
