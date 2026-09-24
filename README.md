@@ -85,6 +85,25 @@ $ filepawl mv src/old_name.py src/pkg/new_name.py
 
 Exits 0 whenever the move itself ran, even with leftover references — they are printed and counted so an agent (or a person) can act on them.
 
+### `filepawl hook`
+
+Reads one Claude Code `PreToolUse` payload on stdin and, for a `Write`, `Edit` or `MultiEdit`, works out how long the file will be after the edit. When that length is over the watch line, or over a cap, it prints hook JSON whose `additionalContext` tells the agent where the file stands: its allowance, how far this edit takes it past that allowance, and that the split can be planned now and delegated. Under the watch line it prints nothing. It never blocks an edit and always exits 0; `filepawl check` stays the gate.
+
+```
+filepawl: pkg/big.py: in the length ratchet at 450 lines; this edit takes it 450 → 458. 8 lines over the allowance; split them out before committing. Plan the split now; it is mechanical and can be delegated.
+```
+
+## Claude Code plugin
+
+This repository is a Claude Code plugin marketplace. The `filepawl` plugin runs `filepawl hook` before every `Write`, `Edit` and `MultiEdit`, so an agent learns that a file has to be split at its first edit instead of at commit time.
+
+```
+/plugin marketplace add ohshitgorillas/filepawl
+/plugin install filepawl@filepawl
+```
+
+The plugin does not bundle filepawl. It runs `$CLAUDE_PROJECT_DIR/.venv/bin/filepawl` when that exists, otherwise `filepawl` from `PATH`, and does nothing when neither is installed, so notices always come from the version the project pins.
+
 ## Configuration
 
 Policy lives in `pyproject.toml` under `[tool.filepawl]`; every key is optional and the defaults are what `filepawl init` writes as a commented stub:
