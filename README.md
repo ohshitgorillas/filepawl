@@ -76,11 +76,20 @@ $ filepawl accept src/module.py --reason "parser plus its own tests fixture"
 
 ### `filepawl mv OLD NEW`
 
-Moves a file (or, for Python, a module) and rewrites the imports that reference it, using whichever mover backend the matching `[tool.filepawl.<language>]` block names — `rope` for Python, a `command` template rendered with `{old}`/`{new}` and run through the shell, or plain `git mv` when no mover is configured. The `rope` mover moves a module into another package under the same name; a move that renames the file exits 2. Afterwards it greps the tree for the old dotted module path and the old relative path as a literal string (catching `importlib`, `mock.patch("pkg.mod.fn")`, entry points and `pyproject.toml` references), prints any hits with `path:line: text` without editing them, and moves the file's allowance entry to the new path if it had one.
+Moves a file and rewrites the imports that point at it. The file's allowance entry moves with it.
+
+The language block that matches the file picks the mover:
+
+- `rope`, the Python default: moves a module into another package and keeps its name. It cannot rename a module.
+- `command`: runs your own `mover_command`, with `{old}` and `{new}` filled in.
+- no mover: plain `git mv`, with no import rewriting.
+
+Some references are not imports, such as `mock.patch("pkg.mod.fn")`, `importlib` calls and entry points. `mv` lists them for you to fix by hand:
 
 ```
-$ filepawl mv src/old_name.py src/pkg/new_name.py
-0 stale references
+$ filepawl mv pkg/util.py pkg/io/util.py
+tests/test_util.py:4: mock.patch("pkg.util.load")
+1 stale references
 ```
 
 Exits 0 whenever the move itself ran, even with leftover references — they are printed and counted so an agent (or a person) can act on them.
