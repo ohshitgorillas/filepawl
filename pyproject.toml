@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "filepawl"
-version = "0.6.0"
+version = "0.7.0"
 description = "Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting, return-shape, named-results and exception-handler gates."
 requires-python = ">=3.12"
 dependencies = [
