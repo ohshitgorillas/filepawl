@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.0 - 2026-09-26
+
+### Added
+
+- **The named-results gate fails mappings of unnamed shape in results.** A return annotation or module-level alias that names `dict`, `Dict`, `Mapping` or `MutableMapping` with an `Any` or `object` value type, or one of those names on its own, fails wherever it sits in the annotation.
+- **The named-results gate takes a `[tool.filepawl.named_results]` policy.** `include`, `exclude`, `enabled`. It has no exemptions.
+- **The `filepawl init` stub gains the named_results block.**
+
 ## 0.4.0 - 2026-09-25
 
 ### Added

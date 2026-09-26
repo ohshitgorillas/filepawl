@@ -1,6 +1,6 @@
 # filepawl
 
-Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting and return-shape gates, packaged as one installable CLI.
+Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting, return-shape and named-results gates, packaged as one installable CLI.
 
 The idea: a file under a "watch" line is unrestricted. Once it crosses that line it needs an allowance entry recording its length, and the allowance can only be lowered or dropped, never raised — so a file that grows past its recorded length fails until it is split, and one that shrinks must have its entry brought down to match. A hard cap still blocks any file, watched or not, from growing without bound. A second, stateless gate caps how many files sit directly in one directory.
 
@@ -150,6 +150,10 @@ include = ["**/*.py"]
 [tool.filepawl.returns.exempt]
 # "path::qualified.name" = reason. A function whose dict returns differ on purpose.
 
+[tool.filepawl.named_results]
+include = ["**/*.py"]
+exclude = []
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -183,6 +187,7 @@ The hook runs `filepawl check` over the whole tree on every commit (`pass_filena
 - **Barrels gate**: refuses a split that leaves a shell behind. A re-export module (a non-`__init__.py` file of imports that defines nothing) and a trivial forwarder (`def f(self, x): return self._other.f(x)`) both shorten a file without changing any caller. Test paths are skipped; `forwarders` limits where the forwarder rule applies, for trees with thin adapter layers. Exemptions live in policy with a reason, no command writes them, and an exemption that excuses nothing fails. Keyword-argument forwarders and call-rooted chains are not caught.
 - **Nesting gate**: refuses a function that nests blocks deeper than `max_depth` (default 4). A level is an `if`, `for`, `while`, `with`, `try` or `match`; `elif` shares its `if`'s level, and a nested `def` starts its own count. Test paths are checked too. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
 - **Returns gate**: refuses a function whose dict-literal returns carry different key sets, such as `{"ok": True, "data": d}` on one path and `{"ok": False}` on another. Only literals whose every key is a string constant count; a `**` spread or computed key is skipped, and a return that is not a dict literal is ignored. Test paths are skipped. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
+- **Named-results gate**: refuses a return annotation or module-level alias that names `dict`, `Dict`, `Mapping` or `MutableMapping` with an `Any` or `object` value type, or one of those names on its own, such as `-> dict[str, Any]` or `Wire = dict[str, Any]`. It reads the whole annotation: inside `|`, `Optional`, `list`, `tuple`, `Callable` and quoted forms, and a value type such as `Any | None`. Test paths are skipped, and `exclude` globs take paths out of scope. There are no exemptions; parsed JSON is typed with a recursive alias such as `JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]`.
 
 The gates, and the mover backends, are registries: a `[tool.filepawl.<gate>]` table with `enabled = false` turns a built-in gate off, and third parties can add their own gate or mover under the `filepawl.gates` / `filepawl.movers` entry-point groups.
 

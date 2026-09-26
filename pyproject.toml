@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "filepawl"
-version = "0.4.0"
-description = "Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting and return-shape gates."
+version = "0.5.0"
+description = "Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting, return-shape and named-results gates."
 requires-python = ">=3.12"
 dependencies = [
     "tomli-w",
