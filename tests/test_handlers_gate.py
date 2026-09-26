@@ -22,7 +22,7 @@ VALUE_IN_HANDLER = (
 def _lines(*lines: int) -> str:
     where = "line" if len(lines) == 1 else "lines"
     spelled = ", ".join(str(line) for line in lines)
-    return f"returns from an except handler at {where} {spelled}" + (
+    return f"hands the caller a value from an except handler at {where} {spelled}" + (
         " — let it propagate, raise a narrower one, or handle it"
         " so nothing returned stands for the failure"
     )
@@ -179,6 +179,160 @@ class TestBareReturns:
         assert _run(root, _policy()) == [Finding("m.py::f", _lines(5, 7))]
 
 
+class TestHandlerAssignments:
+    def test_name_assigned_in_handler_and_returned_fails(
+        self, repo: RepoFactory
+    ) -> None:
+        source = (
+            "def f():\n"
+            "    try:\n"
+            "        result = g()\n"
+            "    except E:\n"
+            "        result = {}\n"
+            "    return result\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [Finding("m.py::f", _lines(5))]
+
+    def test_name_read_anywhere_in_returned_value_fails(
+        self, repo: RepoFactory
+    ) -> None:
+        source = (
+            "def f():\n"
+            "    warning = None\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E as exc:\n"
+            "        warning = str(exc)\n"
+            "    return Outcome(done=True, warning=warning)\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [Finding("m.py::f", _lines(6))]
+
+    def test_name_assigned_in_handler_but_not_returned_passes(
+        self, repo: RepoFactory
+    ) -> None:
+        source = (
+            "def f():\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E as exc:\n"
+            "        detail = str(exc)\n"
+            "        log(detail)\n"
+            "        raise\n"
+            "    return h()\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == []
+
+    def test_handler_assignment_without_value_return_passes(
+        self, repo: RepoFactory
+    ) -> None:
+        source = (
+            "def f():\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E:\n"
+            "        done = False\n"
+            "        return\n"
+            "    h(done)\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == []
+
+    def test_every_assignment_form_binds_a_name(self, repo: RepoFactory) -> None:
+        source = (
+            "def f():\n"
+            "    try:\n"
+            "        a, (b, *c) = g()\n"
+            "    except E:\n"
+            "        a, (b, *c) = 1, (2, 3)\n"
+            "    except F:\n"
+            "        n: int = 0\n"
+            "    except G:\n"
+            "        n += 1\n"
+            "    return a + b + len(c) + n\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [Finding("m.py::f", _lines(5, 7, 9))]
+
+    def test_attribute_and_subscript_targets_bind_no_name(
+        self, repo: RepoFactory
+    ) -> None:
+        source = (
+            "def f(self, out):\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E:\n"
+            "        self.failed = True\n"
+            "        out['error'] = 1\n"
+            "    return self, out\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == []
+
+    def test_assignment_deep_inside_handler_counts(self, repo: RepoFactory) -> None:
+        source = (
+            "def f(xs):\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E:\n"
+            "        for x in xs:\n"
+            "            if x:\n"
+            "                found = x\n"
+            "    return found\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [Finding("m.py::f", _lines(7))]
+
+    def test_nested_def_and_class_in_handler_bind_nothing_for_outer(
+        self, repo: RepoFactory
+    ) -> None:
+        source = (
+            "def f():\n"
+            "    x = 1\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E:\n"
+            "        def inner():\n"
+            "            x = 2\n"
+            "            h(x)\n"
+            "        class C:\n"
+            "            x = 3\n"
+            "    return x\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == []
+
+    def test_returns_and_assignments_are_listed_in_source_order(
+        self, repo: RepoFactory
+    ) -> None:
+        source = (
+            "def f():\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E:\n"
+            "        return 0\n"
+            "    except F:\n"
+            "        v = 1\n"
+            "    return v\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [Finding("m.py::f", _lines(5, 7))]
+
+    def test_exemption_covers_a_handler_assignment(self, repo: RepoFactory) -> None:
+        source = (
+            "def f():\n"
+            "    try:\n"
+            "        v = g()\n"
+            "    except E:\n"
+            "        v = 0\n"
+            "    return v\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy(exempt={"m.py::f": "r"})) == []
+
+
 class TestFunctions:
     def test_nested_def_in_handler_is_judged_on_its_own(
         self, repo: RepoFactory
@@ -285,7 +439,10 @@ class TestExemptions:
         root = repo({"m.py": "def f():\n    return 1\n"})
         policy = _policy(exempt={"m.py::f": "r"})
         assert _run(root, policy) == [
-            _stale("m.py::f", "returns from no handler, so it needs no exemption")
+            _stale(
+                "m.py::f",
+                "hands the caller no value from a handler, so it needs no exemption",
+            )
         ]
 
     def test_entry_covers_every_function_its_key_names(self, repo: RepoFactory) -> None:

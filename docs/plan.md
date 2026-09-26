@@ -169,7 +169,8 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 ### Handlers follow-up (spec §6.10)
 
 - **`fix: name every fix in the handlers finding`**: the finding text names propagating, raising a narrower exception and handling completely, in `filepawl/gates/handlers.py` and §6.10, tested in `tests/test_handlers_gate.py`.
-- **`feat: handlers gate fails values assigned in handlers`**: a name assigned in a handler and read by a value return fails as a handler return does, in `filepawl/gates/handlers.py` and §2, §6.10 and §9, tested in `tests/test_handlers_gate.py`, with `README.md`, `CHANGELOG.md` and the version in `pyproject.toml` and `plugin.json` to match.
+- **`feat: handlers gate fails values assigned in handlers`**: a name assigned in a handler and read by a value return fails as a handler return does, in `filepawl/gates/handlers.py` and §2, §6.10 and §9, tested in `tests/test_handlers_gate.py`, with `README.md` and the `[Unreleased]` section of `CHANGELOG.md` to match.
+- **`chore: release 0.7.0`**: the `[Unreleased]` section of `CHANGELOG.md` becomes 0.7.0, and `pyproject.toml` and `plugin.json` carry 0.7.0.
 
 ## Verification (orchestrator, end)
 

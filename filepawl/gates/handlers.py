@@ -1,13 +1,14 @@
-"""Handlers gate: no sentinel returns from exception handlers (design.md §6.10).
+"""Handlers gate: no sentinel values from exception handlers (design.md §6.10).
 
-A `return` inside an `except` turns the exception into a value the caller
-must know to test for, and drops the exception's type and traceback.
+A `return` inside an `except`, or a name bound there that a later return
+reads, turns the exception into a value the caller must know to test for,
+and drops the exception's type and traceback.
 """
 
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from filepawl.config import Policy
 from filepawl.gates.base import Finding
@@ -21,65 +22,115 @@ _WHERE = "[tool.filepawl.handlers.exempt]"
 _FUNCS = (ast.FunctionDef, ast.AsyncFunctionDef)
 _TRIES = (ast.Try, ast.TryStar)
 
-# (line, is a value return, sits in a handler) per return, in source order.
-_Returns = list[tuple[int, bool, bool]]
-# (qualified name, its returns) per function, outermost first.
-_Found = list[tuple[str, _Returns]]
+_ASSIGNS = (ast.Assign, ast.AnnAssign, ast.AugAssign)
+
+
+@dataclass
+class _Function:
+    """What the handlers gate reads from one function's own statements."""
+
+    # (line, is a value return, sits in a handler, names the value reads).
+    returns: list[tuple[int, bool, bool, frozenset[str]]] = field(default_factory=list)
+    # (line, name) per name a handler assignment binds.
+    bound: list[tuple[int, str]] = field(default_factory=list)
+
+
+# (qualified name, what it holds) per function, outermost first.
+_Found = list[tuple[str, _Function]]
+
+
+def _reads(node: ast.expr | None) -> frozenset[str]:
+    """Return every name an expression loads."""
+    if node is None:
+        return frozenset()
+    return frozenset(
+        n.id
+        for n in ast.walk(node)
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+    )
+
+
+def _binds(node: ast.Assign | ast.AnnAssign | ast.AugAssign) -> list[str]:
+    """Return the plain names an assignment statement binds."""
+    if isinstance(node, ast.AnnAssign) and node.value is None:
+        return []
+    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+    return [
+        n.id
+        for target in targets
+        for n in ast.walk(target)
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+    ]
 
 
 def _walk(
     body: list[ast.stmt],
     prefix: str,
     found: _Found,
-    returns: _Returns,
+    func: _Function,
     in_handler: bool,
 ) -> None:
-    """Add the returns a list of statements makes to `returns`, recording functions."""
+    """Add what a list of statements returns and binds to `func`, recording defs."""
     for node in body:
         if isinstance(node, _FUNCS):
             _record(node, prefix, found)
         elif isinstance(node, ast.ClassDef):
-            _walk(node.body, f"{prefix}{node.name}.", found, [], False)
+            _walk(node.body, f"{prefix}{node.name}.", found, _Function(), False)
         elif isinstance(node, ast.Return):
-            returns.append((node.lineno, node.value is not None, in_handler))
+            reads = _reads(node.value)
+            func.returns.append(
+                (node.lineno, node.value is not None, in_handler, reads)
+            )
+        elif isinstance(node, _ASSIGNS) and in_handler:
+            func.bound += [(node.lineno, name) for name in _binds(node)]
         elif isinstance(node, _TRIES):
             for inner in (node.body, node.orelse, node.finalbody):
-                _walk(inner, prefix, found, returns, in_handler)
+                _walk(inner, prefix, found, func, in_handler)
             for handler in node.handlers:
-                _walk(handler.body, prefix, found, returns, True)
+                _walk(handler.body, prefix, found, func, True)
         else:
             for inner in block_bodies(node):
-                _walk(inner, prefix, found, returns, in_handler)
+                _walk(inner, prefix, found, func, in_handler)
 
 
 def _record(
     node: ast.FunctionDef | ast.AsyncFunctionDef, prefix: str, found: _Found
 ) -> None:
-    """Append a function's returns to `found`, outermost first."""
+    """Append a function's returns and handler bindings to `found`, outermost first."""
     name = f"{prefix}{node.name}"
-    returns: _Returns = []
-    found.append((name, returns))
-    _walk(node.body, f"{name}.", found, returns, False)
+    func = _Function()
+    found.append((name, func))
+    _walk(node.body, f"{name}.", found, func, False)
 
 
 def function_returns(module: ast.Module) -> _Found:
-    """Return (qualified name, returns) for every function in a module."""
+    """Return (qualified name, returns and handler bindings) for every function."""
     found: _Found = []
-    _walk(module.body, "", found, [], False)
+    _walk(module.body, "", found, _Function(), False)
     return found
 
 
-def _failing(returns: _Returns) -> list[int]:
-    """Return the lines of the handler returns that hand the caller a value."""
-    valued = any(value for _, value, _ in returns)
-    return [
-        line for line, value, in_handler in returns if in_handler and (value or valued)
-    ]
+def _failing(func: _Function) -> list[int]:
+    """Return the lines where a handler hands the caller a value.
+
+    A handler return fails when it returns a value, or when the function
+    returns one elsewhere. A handler assignment fails when a value return
+    reads the name it binds.
+    """
+    valued = any(value for _, value, _, _ in func.returns)
+    returned = frozenset().union(*(reads for *_, reads in func.returns))
+    lines = {
+        line
+        for line, value, in_handler, _ in func.returns
+        if in_handler and (value or valued)
+    }
+    lines |= {line for line, name in func.bound if name in returned}
+    return sorted(lines)
 
 
 @dataclass
 class HandlersGate:
-    """Refuses functions that return a value from an exception handler."""
+    """Refuses functions that hand the caller a value from an exception handler."""
 
     name: str = "handlers"
 
@@ -96,14 +147,15 @@ class HandlersGate:
                 # has no handler to judge.
                 continue
             measured[path] = function_returns(module)
-            for func, returns in measured[path]:
-                lines = _failing(returns)
+            for func, held in measured[path]:
+                lines = _failing(held)
                 if not lines or f"{path}::{func}" in exempt:
                     continue
                 where = "line" if len(lines) == 1 else "lines"
                 spelled = ", ".join(str(line) for line in lines)
                 message = (
-                    f"returns from an except handler at {where} {spelled}"
+                    "hands the caller a value from an except handler"
+                    f" at {where} {spelled}"
                     " — let it propagate, raise a narrower one, or handle it"
                     " so nothing returned stands for the failure"
                 )
@@ -123,15 +175,15 @@ class HandlersGate:
         findings = []
         for key in sorted(policy.handlers.exempt):
             path, _, func = key.partition("::")
-            named = [
-                returns for name, returns in measured.get(path, []) if name == func
-            ]
+            named = [held for name, held in measured.get(path, []) if name == func]
             if path not in measured:
                 message = "names no file"
             elif not named:
                 message = "names no function"
-            elif not any(_failing(returns) for returns in named):
-                message = "returns from no handler, so it needs no exemption"
+            elif not any(_failing(held) for held in named):
+                message = (
+                    "hands the caller no value from a handler, so it needs no exemption"
+                )
             else:
                 continue
             findings.append(Finding(_POLICY_FILE, f"{_WHERE} {key!r}: {message}"))

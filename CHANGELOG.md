@@ -4,11 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [Unreleased]
 
 ### Changed
 
-- **The handlers finding names every fix.** It ends `— let it propagate, raise a narrower one, or handle it so nothing returned stands for the failure` in place of `— raise instead of returning a sentinel`.
+- **`filepawl check` can report handlers findings on code that passed before.**
 
 ## 0.6.0 - 2026-09-26
 
