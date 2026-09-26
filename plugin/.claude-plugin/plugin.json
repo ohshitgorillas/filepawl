@@ -1,5 +1,5 @@
 {
   "name": "filepawl",
   "description": "Tells an agent, before an edit lands, where the edit leaves the file against filepawl's watch line, allowance and cap.",
-  "version": "0.5.0"
+  "version": "0.6.0"
 }
