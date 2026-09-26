@@ -1,5 +1,6 @@
 {
   "enabledPlugins": {
-    "triviajudge@triviajudge": true
+    "triviajudge@triviajudge": true,
+    "filepawl@filepawl": true
   }
 }
