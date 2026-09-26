@@ -91,8 +91,10 @@ def main(argv: list[str] | None = None) -> int:
 
             return run_hook(sys.stdin, sys.stdout)
     except FilepawlError as exc:
+        # Exit 2 as argparse does for a usage error: the failure leaves the
+        # process as an exit status, not as a value `main` hands back.
         print(f"filepawl: {exc}", file=sys.stderr)
-        return 2
+        raise SystemExit(2) from exc
 
     # No subcommand is a usage error, so the help goes where the other
     # exit-2 messages go.

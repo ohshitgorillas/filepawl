@@ -103,7 +103,8 @@ def test_command_backend_non_zero_exit_is_a_config_error(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/a.py", "pkg/b.py"])
 
     err = capsys.readouterr().err
     assert "exit 3" in err
@@ -123,7 +124,8 @@ def test_command_backend_rejects_an_unknown_placeholder(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/a.py", "pkg/b.py"])
 
     err = capsys.readouterr().err
     assert "sh bin/move.sh {other}" in err
@@ -166,7 +168,8 @@ def test_command_backend_needs_mover_command(
     root = repo({"pyproject.toml": policy(mover="command"), "pkg/a.py": "X = 1\n"})
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/a.py", "pkg/b.py"])
     assert "mover_command" in capsys.readouterr().err
 
 
@@ -198,7 +201,8 @@ def test_git_mv_failure_exits_two(
     root = repo({"pyproject.toml": policy(), "pkg/__init__.py": ""})
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/missing.py", "pkg/other.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/missing.py", "pkg/other.py"])
     assert "git mv" in capsys.readouterr().err
 
 
@@ -209,7 +213,8 @@ def test_git_mv_on_an_untracked_old_path_exits_two(
     (root / "pkg" / "loose.py").write_text("X = 1\n", encoding="utf-8")
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/loose.py", "pkg/moved.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/loose.py", "pkg/moved.py"])
 
     assert "git mv" in capsys.readouterr().err
     assert (root / "pkg" / "loose.py").exists()
@@ -227,7 +232,8 @@ def test_unmatched_old_path_exits_two(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/a.py", "pkg/b.py"])
     assert "no language block" in capsys.readouterr().err
 
 
@@ -322,7 +328,8 @@ def test_rope_missing_prints_the_install_line(
     monkeypatch.chdir(root)
     monkeypatch.setitem(sys.modules, "rope", None)
 
-    assert main(["mv", "pkg/a.py", "pkg/sub/a.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/a.py", "pkg/sub/a.py"])
 
     assert "pip install 'filepawl[mv]'" in capsys.readouterr().err
     assert (root / "pkg" / "a.py").exists()
@@ -342,7 +349,8 @@ def test_rope_refuses_a_destination_that_is_not_a_package(
     (root / "plain").mkdir()
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "plain/a.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/a.py", "plain/a.py"])
 
     assert "plain: not a package" in capsys.readouterr().err
     assert (root / "pkg" / "a.py").exists()
@@ -362,7 +370,8 @@ def test_rope_refuses_a_destination_directory_that_does_not_exist(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/sub/a.py"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["mv", "pkg/a.py", "pkg/sub/a.py"])
 
     assert "pkg/sub: not a package" in capsys.readouterr().err
     assert not (root / "pkg" / "sub").exists()

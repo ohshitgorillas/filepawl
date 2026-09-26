@@ -118,7 +118,8 @@ def test_check_path_outside_the_repository_exits_two(
 ) -> None:
     root = repo({"a.py": 10})
     monkeypatch.chdir(root)
-    assert main(["check", "/etc"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["check", "/etc"])
     err = capsys.readouterr().err
     assert err.startswith("filepawl: ")
     assert "outside the repository" in err
@@ -130,7 +131,8 @@ def test_check_exits_two_on_an_unparseable_state_file(
     root = repo({"a.py": 10})
     write_state_text(root, "version = \n")
     monkeypatch.chdir(root)
-    assert main(["check"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["check"])
     err = capsys.readouterr().err
     assert err.startswith("filepawl: ")
     assert "unparseable TOML" in err
@@ -148,7 +150,8 @@ def test_check_exits_two_on_an_unknown_mover(
         }
     )
     monkeypatch.chdir(root)
-    assert main(["check"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["check"])
     err = capsys.readouterr().err
     assert err.startswith("filepawl: ")
     assert "unknown mover" in err
@@ -250,7 +253,8 @@ def test_accept_reason_without_a_path_exits_two(
 ) -> None:
     root = repo({"a.py": WATCH + 1})
     monkeypatch.chdir(root)
-    assert main(["accept", "--reason", "why"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["accept", "--reason", "why"])
     err = capsys.readouterr().err
     assert err.startswith("filepawl: ")
     assert "--reason" in err
@@ -262,7 +266,8 @@ def test_accept_reason_with_two_paths_exits_two(
 ) -> None:
     root = repo({"a.py": WATCH + 1, "b.py": WATCH + 1})
     monkeypatch.chdir(root)
-    assert main(["accept", "a.py", "b.py", "--reason", "why"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["accept", "a.py", "b.py", "--reason", "why"])
     assert "--reason" in capsys.readouterr().err
     assert not (root / STATE_FILE).exists()
 
@@ -272,7 +277,8 @@ def test_accept_reason_for_a_path_with_no_entry_exits_two(
 ) -> None:
     root = repo({"a.py": 10})
     monkeypatch.chdir(root)
-    assert main(["accept", "a.py", "--reason", "why"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["accept", "a.py", "--reason", "why"])
     err = capsys.readouterr().err
     assert err.startswith("filepawl: ")
     assert "no allowance entry" in err
@@ -306,7 +312,8 @@ def test_init_refuses_an_existing_state_file(
     root = repo({"a.py": 10, "pyproject.toml": PYPROJECT})
     monkeypatch.chdir(root)
     assert main(["init"]) == 0
-    assert main(["init"]) == 2
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["init"])
     err = capsys.readouterr().err
     assert err.startswith("filepawl: ")
     assert STATE_FILE in err

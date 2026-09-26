@@ -29,10 +29,24 @@ class _Verdict:
     deny: bool = False
 
 
+class _Unjudgeable(Exception):
+    """The payload, the repository or the file cannot be read."""
+
+
 def run_hook(stdin: TextIO, stdout: TextIO) -> int:
-    verdict = _verdict(stdin.read())
-    if verdict is None:
-        return 0
+    try:
+        verdict = _verdict(stdin.read())
+    except _Unjudgeable:
+        # Silence is the whole handling: `check` reports configuration
+        # errors, and Claude Code reports a failed edit.
+        pass
+    else:
+        if verdict is not None:
+            _emit(verdict, stdout)
+    return 0
+
+
+def _emit(verdict: _Verdict, stdout: TextIO) -> None:
     specific: dict[str, str] = {"hookEventName": "PreToolUse"}
     if verdict.deny:
         specific["permissionDecision"] = "deny"
@@ -41,14 +55,18 @@ def run_hook(stdin: TextIO, stdout: TextIO) -> int:
         specific["additionalContext"] = f"filepawl: {verdict.text}"
     output = {"hookSpecificOutput": specific}
     print(json.dumps(output, ensure_ascii=False), file=stdout)
-    return 0
 
 
 def _verdict(raw: str) -> _Verdict | None:
+    """Return the notice or denial for an edit, or None when it earns neither.
+
+    Raises `_Unjudgeable` when the payload, the repository or the file
+    cannot be read.
+    """
     try:
         payload = json.loads(raw)
-    except ValueError:
-        return None
+    except ValueError as exc:
+        raise _Unjudgeable from exc
     if not isinstance(payload, dict) or payload.get("tool_name") not in _TOOLS:
         return None
     cwd = payload.get("cwd")
@@ -63,23 +81,22 @@ def _verdict(raw: str) -> _Verdict | None:
         root = find_root(Path(cwd))
         policy = load_policy(root)
         state = load_state(root)
-    except (FilepawlError, OSError):
-        return None
+    except (FilepawlError, OSError) as exc:
+        raise _Unjudgeable from exc
     if not policy.length.enabled:
         return None
 
     target = (Path(cwd) / file_path).resolve()
-    try:
-        path = target.relative_to(root.resolve()).as_posix()
-    except ValueError:
+    if not target.is_relative_to(root.resolve()):
         return None
+    path = target.relative_to(root.resolve()).as_posix()
     if not _included(policy, path):
         return None
 
     try:
         before = target.read_text(encoding="utf-8") if target.is_file() else ""
-    except (OSError, UnicodeDecodeError):
-        return None
+    except (OSError, UnicodeDecodeError) as exc:
+        raise _Unjudgeable from exc
     after = _project(str(payload["tool_name"]), tool_input, before)
     if after is None:
         return None

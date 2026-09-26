@@ -24,10 +24,10 @@ class Mover(Protocol):
 
 def relative_to_root(path: Path, root: Path) -> str:
     """`path` as a posix path relative to `root`, or unchanged if outside it."""
-    try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
-    except ValueError:
-        return path.as_posix()
+    resolved, top = path.resolve(), root.resolve()
+    if resolved.is_relative_to(top):
+        return resolved.relative_to(top).as_posix()
+    return path.as_posix()
 
 
 def grep_refs(root: Path, files: Iterable[str], needles: Sequence[str]) -> list[str]:
