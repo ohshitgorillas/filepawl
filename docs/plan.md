@@ -152,6 +152,13 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`docs: hook in README and changelog`**: `README.md`, `CHANGELOG.md`, version 0.3.0 in `pyproject.toml` and `plugin.json`.
 - **`feat: deny edits that grow a file over its cap`**: `docs/design.md` §2, §7.1, §9; `filepawl/hook.py`; `tests/test_hook.py`; `plugin/hooks/filepawl-hook.sh` comment; `README.md`; `CHANGELOG.md`.
 
+### Returns gate (spec §6.8)
+
+- **`docs: returns gate spec`**: `docs/design.md` §1, §2, §3, §4, §6.3, §6.8, §9, §10; this phase.
+- **`feat: returns policy`**: `ReturnsPolicy` in `filepawl/config.py` (`enabled`, `include`, `exempt`), `returns` reserved, registry `_is_enabled` branch, policy stub; tests in `tests/test_config.py` and `tests/test_gate_registry.py`.
+- **`feat: returns gate`**: `filepawl/gates/returns.py`, registered fifth among built-ins; tests in `tests/test_returns_gate.py`.
+- **`docs: returns in README and changelog`**: `README.md`, `CHANGELOG.md`, version 0.4.0 in `pyproject.toml` and `plugin.json`.
+
 ## Verification (orchestrator, end)
 
 ```

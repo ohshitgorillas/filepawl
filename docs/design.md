@@ -11,6 +11,7 @@ filepawl extracts the engine into one installable package with:
 - a second gate against flat directory structure (files per directory, cap only);
 - a third gate against splits that leave a shell behind (re-export modules and trivial forwarders);
 - a fourth gate against functions that nest blocks too deep;
+- a fifth gate against functions whose returned dict literals disagree on their keys;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own;
 - a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap, and stops an edit that grows a file over its cap.
@@ -39,6 +40,10 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Nesting file set | tree files matched by the gate's own `include`, test paths included; whole tree every run |
 | Nesting limit | `max_depth`, default 4, the limit all three scripts hold |
 | Nesting exemptions | live in policy, per function, human-edited, with a reason; no command writes them, and a stale one fails |
+| Returns gate | built-in, enabled by default, Python only (`ast`); compares the key sets of a function's dict-literal returns |
+| Returns file set | tree files matched by the gate's own `include`, minus test paths; whole tree every run |
+| Returns shapes | only dict literals whose every key is a string constant; a literal with `**` or any other key is skipped, and a return that is not a dict literal is ignored |
+| Returns exemptions | live in policy, per function, human-edited, with a reason; no command writes them, and a stale one fails |
 | Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload; it denies an edit that grows a file to over its cap, and warns on any other edit that leaves the file over the watch line or a cap |
 | Plugin | a Claude Code marketplace in this repository with one plugin under `plugin/`; its hook runs the consumer's installed `filepawl`, not a bundled copy |
 
@@ -62,6 +67,7 @@ filepawl/
     dircount.py     # files-per-directory cap
     barrels.py      # re-export modules and trivial forwarders
     nesting.py      # block depth per function
+    returns.py      # key sets of dict-literal returns per function
     registry.py     # built-ins + entry points
   movers/
     __init__.py
@@ -128,6 +134,12 @@ max_depth = 4
 [tool.filepawl.nesting.exempt]
 # "path::qualified.name" = reason. Human-edited. A function that nests past the limit on purpose.
 
+[tool.filepawl.returns]
+include = ["**/*.py"]
+
+[tool.filepawl.returns.exempt]
+# "path::qualified.name" = reason. Human-edited. A function whose dict returns differ on purpose.
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -188,7 +200,7 @@ For each directory that contains at least one include-matched file: count the in
 
 ### 6.3 Scope of a run
 
-`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate and the nesting gate always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
+`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate and the returns gate always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
 
 `.pre-commit-hooks.yaml` declares the hook with `pass_filenames: false` and `always_run: true`: one hook covers every language, where HQPTuner today needs a `types: [python]` hook and a `types: [javascript]` hook and checks CSS only from `make`. The whole-tree run is one `git ls-files` plus a line count per file, so nothing is saved by narrowing it.
 
@@ -240,6 +252,26 @@ Exemptions live in `[tool.filepawl.nesting.exempt]`, keyed `path::qualified.name
 - an entry whose functions all nest within the limit: `nests N deep, within the limit of M`, where N is the deepest of them.
 
 No nesting finding is fixable by `accept`, and `accept` leaves state unchanged.
+
+### 6.8 Returns gate
+
+A function that returns a dict literal on one path and a dict literal with other keys on another hands its caller a shape the caller must probe with `.get` or `in`. The caller cannot tell a missing key from a bug. The shape is a type the function never declared, and the fix is to return one shape, or a dataclass, or to split the function.
+
+Checked files: tree files matched by `[tool.filepawl.returns] include`, minus test paths, since test helpers build fixtures of varying shape on purpose. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6.
+
+A shaped return is a `return` statement whose value is a dict literal in which every key is a string constant. Its shape is the set of those keys; order and repeats do not count, and `return {}` has the empty shape. A dict literal with a `**` spread or with any key that is not a string constant has no knowable shape and is skipped. A `return` whose value is anything other than a dict literal is ignored, as is a bare `return`, so a function may return a shaped dict on one path and `None` on another.
+
+Returns belong to the innermost function that contains them. A nested `def` has its own returns and does not add to the outer function's; a `lambda` has no `return` statement. Functions are named by qualified name as in §6.7.
+
+A function whose shaped returns carry more than one shape fails. Finding: `path::qualified.name: returns dicts of N shapes ({a, b}; {a}) — return one shape`, where N counts the distinct shapes and each is listed with its keys sorted, in order of first appearance, `{}` for the empty shape.
+
+Exemptions live in `[tool.filepawl.returns.exempt]`, keyed `path::qualified.name`, with a reason. An entry covers every function its key names. The audit covers every entry on every run and reports each finding under path `pyproject.toml`:
+
+- an entry whose path is not a checked file: `names no file`;
+- an entry naming no function in its file: `names no function`;
+- an entry whose functions each return at most one shape: `returns one shape, so it needs no exemption`.
+
+No returns finding is fixable by `accept`, and `accept` leaves state unchanged.
 
 ## 7. CLI
 
@@ -302,6 +334,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Directory gate: at cap, over cap, `__init__.py` excluded, nested directories counted separately, tests cap applied.
 - Barrels gate: port the cases of HQPTuner's `tests/gates/test_no_barrels.py`, Trivia Judge's `tests/gates/test_check_no_barrels.py` and Gauntlet's `no_barrels_selftest.py`. Scope cases are expressed through `forwarders`, and exemption cases through policy.
 - Nesting gate: port the cases of HQPTuner's `tests/gates/test_nesting.py`, Trivia Judge's `tests/gates/test_check_nesting.py` and Gauntlet's `nesting_selftest.py`. Cases on the `depths` seam are expressed as findings at a limit that exposes the measured depth, and exemption cases through policy.
+- Returns gate: one shape passes; two shapes fail and are listed in first-appearance order; key order and repeats do not count; `{}` is a shape; spread and non-string-constant keys are skipped; non-dict and bare returns are ignored; a nested `def`'s returns are its own; methods are named by qualified name; test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
 - `accept`: adds, lowers, refuses to raise, drops stale, preserves reason, stable sort.
 - `init`: fresh tree, refuses overwrite, appends policy stub once.
 - `mv`: `command` backend with a fake script; `rope` backend behind `pytest.importorskip("rope")`; stale-ref grep finds a `mock.patch` string.
@@ -313,7 +346,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 
 Per repository, one PR:
 
-1. Add `filepawl` to dev dependencies (git URL pinned to a tag) and a pre-commit entry `repo: https://github.com/ohshitgorillas/filepawl`, `rev: vX.Y.Z`, hook `filepawl`. 2. Write `[tool.filepawl]` in `pyproject.toml` only where the repository departs from defaults: HQPTuner adds a `javascript` block and the `junkcal_fixture.py` exemption; Gauntlet adds `**/*.sh` to `include`. For the barrels gate, HQPTuner sets `include` to `hqptuner/**/*.py` and `scripts/**/*.py`, `forwarders` to its `core`, `lanes`, `presets`, `engine` and `conf` packages, and carries its two `presetops.py` forwarder exemptions over with their reasons. Trivia Judge sets `include` and `forwarders` to `triviajudge/**` and `scripts/**`. Gauntlet sets `include` to `hooks/**/*.py` and `scripts/**/*.py`. Gauntlet's script also reads untracked files, and filepawl does not. The nesting gate needs no policy in any of the three: its default `include` is the file set all three measure, and none carries a nesting exemption. 3. Run `filepawl init`. Existing `ALLOWANCE` values need no import: the old ratchet already forced exact equality with current lengths, so `init` reproduces them. Carry Trivia Judge's per-entry comments over with `filepawl accept <path> --reason "..."`. 4. Run `filepawl check`; expect clean. Directory gate may surface new findings; those are decided per repository, not silently exempted. 5. Delete the old length, barrels and nesting scripts, their tests, and their Makefile / pre-commit / gate-runner wiring. Replace the CONTRIBUTING and CLAUDE.md prose with one line pointing at `filepawl check` and `filepawl accept`.
+1. Add `filepawl` to dev dependencies (git URL pinned to a tag) and a pre-commit entry `repo: https://github.com/ohshitgorillas/filepawl`, `rev: vX.Y.Z`, hook `filepawl`. 2. Write `[tool.filepawl]` in `pyproject.toml` only where the repository departs from defaults: HQPTuner adds a `javascript` block and the `junkcal_fixture.py` exemption; Gauntlet adds `**/*.sh` to `include`. For the barrels gate, HQPTuner sets `include` to `hqptuner/**/*.py` and `scripts/**/*.py`, `forwarders` to its `core`, `lanes`, `presets`, `engine` and `conf` packages, and carries its two `presetops.py` forwarder exemptions over with their reasons. Trivia Judge sets `include` and `forwarders` to `triviajudge/**` and `scripts/**`. Gauntlet sets `include` to `hooks/**/*.py` and `scripts/**/*.py`. Gauntlet's script also reads untracked files, and filepawl does not. The nesting gate needs no policy in any of the three: its default `include` is the file set all three measure, and none carries a nesting exemption. The returns gate is new to all three; its findings are decided per repository, as directory-gate findings are. 3. Run `filepawl init`. Existing `ALLOWANCE` values need no import: the old ratchet already forced exact equality with current lengths, so `init` reproduces them. Carry Trivia Judge's per-entry comments over with `filepawl accept <path> --reason "..."`. 4. Run `filepawl check`; expect clean. Directory gate may surface new findings; those are decided per repository, not silently exempted. 5. Delete the old length, barrels and nesting scripts, their tests, and their Makefile / pre-commit / gate-runner wiring. Replace the CONTRIBUTING and CLAUDE.md prose with one line pointing at `filepawl check` and `filepawl accept`.
 
 ## 11. Open items deferred
 
