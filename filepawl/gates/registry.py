@@ -22,6 +22,7 @@ _BUILTIN_GATES: tuple[tuple[str, str, str], ...] = (
     ("dircount", "filepawl.gates.dircount", "DircountGate"),
     ("barrels", "filepawl.gates.barrels", "BarrelsGate"),
     ("nesting", "filepawl.gates.nesting", "NestingGate"),
+    ("returns", "filepawl.gates.returns", "ReturnsGate"),
 )
 
 _GATE_ATTRS = ("name", "run", "accept")

@@ -57,7 +57,7 @@ def _if_depth(node: ast.If, depth: int, prefix: str, found: _Found) -> int:
     return max(deepest, _walk(node.orelse, depth + 1, prefix, found))
 
 
-def _block_bodies(node: ast.stmt) -> list[list[ast.stmt]]:
+def block_bodies(node: ast.stmt) -> list[list[ast.stmt]]:
     """Return every statement list a block hands its body to."""
     bodies = [getattr(node, name, []) for name in ("body", "orelse", "finalbody")]
     bodies += [handler.body for handler in getattr(node, "handlers", [])]
@@ -75,7 +75,7 @@ def _statement_depth(node: ast.stmt, depth: int, prefix: str, found: _Found) -> 
     if isinstance(node, ast.If):
         return _if_depth(node, depth, prefix, found)
     if isinstance(node, _BLOCKS):
-        bodies = _block_bodies(node)
+        bodies = block_bodies(node)
         return max(_walk(body, depth + 1, prefix, found) for body in bodies)
     return depth
 
