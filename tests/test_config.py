@@ -14,6 +14,7 @@ from filepawl.config import (
     LengthPolicy,
     NestingPolicy,
     Policy,
+    ReturnsPolicy,
     default_policy,
     load_policy,
 )
@@ -113,6 +114,44 @@ class TestNestingPolicy:
     def test_stub_carries_the_nesting_block(self) -> None:
         assert "# [tool.filepawl.nesting]" in DEFAULT_POLICY_STUB
         assert "# max_depth = 4" in DEFAULT_POLICY_STUB
+
+
+class TestReturnsPolicy:
+    def test_defaults(self) -> None:
+        assert default_policy().returns == ReturnsPolicy(
+            include=("**/*.py",), exempt={}, enabled=True
+        )
+
+    def test_table_is_read(self, tmp_path: Path) -> None:
+        write(
+            tmp_path,
+            "[tool.filepawl.returns]\n"
+            'include = ["pkg/**/*.py"]\n'
+            "enabled = false\n"
+            "[tool.filepawl.returns.exempt]\n"
+            '"pkg/a.py::C.f" = "wire format, two message kinds"\n',
+        )
+        policy = load_policy(tmp_path)
+        assert policy.returns == ReturnsPolicy(
+            include=("pkg/**/*.py",),
+            exempt={"pkg/a.py::C.f": "wire format, two message kinds"},
+            enabled=False,
+        )
+        assert "returns" not in policy.gate_tables
+
+    def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
+        write(tmp_path, "[tool.filepawl.returns]\nmax_shapes = 2\n")
+        with pytest.raises(ConfigError, match="unknown key 'max_shapes'"):
+            load_policy(tmp_path)
+
+    def test_exemption_reason_must_be_a_string(self, tmp_path: Path) -> None:
+        write(tmp_path, '[tool.filepawl.returns.exempt]\n"a.py::f" = 1\n')
+        with pytest.raises(ConfigError, match="must be a string reason"):
+            load_policy(tmp_path)
+
+    def test_stub_carries_the_returns_block(self) -> None:
+        assert "# [tool.filepawl.returns]" in DEFAULT_POLICY_STUB
+        assert "# [tool.filepawl.returns.exempt]" in DEFAULT_POLICY_STUB
 
 
 class TestDefaultPolicy:
