@@ -82,5 +82,7 @@ def _is_enabled(name: str, policy: Policy) -> bool:
         return policy.named_results.enabled
     if name == "handlers":
         return policy.handlers.enabled
+    if name == "absence":
+        return policy.absence.enabled
     table = policy.gate_tables.get(name, {})
     return table.get("enabled", True) is not False

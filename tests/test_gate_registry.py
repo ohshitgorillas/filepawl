@@ -113,6 +113,24 @@ def test_handlers_disabled_via_policy_handlers_enabled(
     assert registry.discover_gates(policy) == []
 
 
+def test_absence_disabled_via_policy_absence_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_module(monkeypatch, "fake_absence_mod", "FakeAbsence", "absence")
+    monkeypatch.setattr(
+        registry,
+        "_BUILTIN_GATES",
+        (("absence", "fake_absence_mod", "FakeAbsence"),),
+    )
+    monkeypatch.setattr(registry, "entry_points", lambda group: [])
+    absence = dataclasses.replace(default_policy().absence, enabled=False)
+    policy = dataclasses.replace(default_policy(), absence=absence)
+
+    enabled = [g.name for g in registry.discover_gates(default_policy())]
+    disabled = [g.name for g in registry.discover_gates(policy)]
+    assert (enabled, disabled) == (["absence"], [])
+
+
 class _FakeEntryPoint:
     def __init__(self, name: str, loader: object) -> None:
         self.name = name

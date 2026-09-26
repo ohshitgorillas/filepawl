@@ -65,6 +65,13 @@ DEFAULT_POLICY_STUB = (
             '# "path::qualified.name" = reason. Human-edited. A function that '
             "returns from a handler on purpose.",
             "",
+            "[tool.filepawl.absence]",
+            'include = ["**/*.py"]',
+            "",
+            "[tool.filepawl.absence.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A test that '
+            "asserts only an absent value on purpose.",
+            "",
             "[tool.filepawl.python]",
             'include = ["**/*.py"]',
             'mover = "rope"',

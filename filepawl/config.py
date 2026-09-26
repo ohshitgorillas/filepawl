@@ -6,6 +6,13 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from filepawl.config_values import (
+    bool_value,
+    check_keys,
+    exempt_table,
+    int_value,
+    str_list,
+)
 from filepawl.errors import ConfigError
 
 # Names validated here belong to filepawl's own built-in movers. A name
@@ -23,6 +30,7 @@ _RESERVED_TABLES = (
     "returns",
     "named_results",
     "handlers",
+    "absence",
 )
 _TOP_LEVEL_SCALAR_KEYS = ("languages", "tests")
 _LANGUAGE_KEYS = ("include", "mover", "mover_command")
@@ -39,6 +47,7 @@ _NESTING_KEYS = ("include", "max_depth", "exempt", "enabled")
 _RETURNS_KEYS = ("include", "exempt", "enabled")
 _NAMED_RESULTS_KEYS = ("include", "exclude", "enabled")
 _HANDLERS_KEYS = ("include", "exempt", "enabled")
+_ABSENCE_KEYS = ("include", "exempt", "enabled")
 
 
 @dataclass(frozen=True)
@@ -103,6 +112,13 @@ class HandlersPolicy:
 
 
 @dataclass(frozen=True)
+class AbsencePolicy:
+    include: tuple[str, ...] = ("**/*.py",)
+    exempt: dict[str, str] = field(default_factory=dict)
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
 class Policy:
     languages: dict[str, LanguagePolicy]
     tests: tuple[str, ...]
@@ -115,6 +131,7 @@ class Policy:
     returns: ReturnsPolicy = field(default_factory=ReturnsPolicy)
     named_results: NamedResultsPolicy = field(default_factory=NamedResultsPolicy)
     handlers: HandlersPolicy = field(default_factory=HandlersPolicy)
+    absence: AbsencePolicy = field(default_factory=AbsencePolicy)
 
 
 def default_policy() -> Policy:
@@ -159,17 +176,18 @@ def load_policy(root: Path) -> Policy:
 
 
 def _build_policy(raw: dict[str, object]) -> Policy:
-    language_names = _str_list(raw.get("languages", ["python"]), "languages")
-    test_globs = _str_list(raw.get("tests", ["tests/**"]), "tests")
+    language_names = str_list(raw.get("languages", ["python"]), "languages")
+    test_globs = str_list(raw.get("tests", ["tests/**"]), "tests")
 
     length = _build_length(raw.get("length"))
     dircount = _build_dircount(raw.get("dircount"))
-    exempt = _build_exempt(raw.get("exempt"))
+    exempt = exempt_table(raw.get("exempt"))
     barrels = _build_barrels(raw.get("barrels"))
     nesting = _build_nesting(raw.get("nesting"))
     returns = _build_returns(raw.get("returns"))
     named_results = _build_named_results(raw.get("named_results"))
     handlers = _build_handlers(raw.get("handlers"))
+    absence = _build_absence(raw.get("absence"))
 
     languages = {name: _build_language(name, raw.get(name)) for name in language_names}
 
@@ -195,6 +213,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         returns=returns,
         named_results=named_results,
         handlers=handlers,
+        absence=absence,
     )
 
 
@@ -220,7 +239,7 @@ def _build_language(name: str, table: object) -> LanguagePolicy:
     include_raw = table.get("include", include_default)
     if include_raw is None:
         raise ConfigError(f"[tool.filepawl.{name}] needs 'include'")
-    include = _str_list(include_raw, f"[tool.filepawl.{name}].include")
+    include = str_list(include_raw, f"[tool.filepawl.{name}].include")
 
     mover_default = default.mover if default is not None else None
     mover = table.get("mover", mover_default)
@@ -242,12 +261,16 @@ def _build_length(table: object) -> LengthPolicy:
         return LengthPolicy()
     if not isinstance(table, dict):
         raise ConfigError("[tool.filepawl.length] must be a table")
-    _check_keys(table, _LENGTH_KEYS, "[tool.filepawl.length]")
+    check_keys(table, _LENGTH_KEYS, "[tool.filepawl.length]")
     return LengthPolicy(
-        cap=_int(table.get("cap", 500), "[tool.filepawl.length].cap"),
-        cap_tests=_int(table.get("cap_tests", 800), "[tool.filepawl.length].cap_tests"),
-        watch=_int(table.get("watch", 400), "[tool.filepawl.length].watch"),
-        enabled=_bool(table.get("enabled", True), "[tool.filepawl.length].enabled"),
+        cap=int_value(table.get("cap", 500), "[tool.filepawl.length].cap"),
+        cap_tests=int_value(
+            table.get("cap_tests", 800), "[tool.filepawl.length].cap_tests"
+        ),
+        watch=int_value(table.get("watch", 400), "[tool.filepawl.length].watch"),
+        enabled=bool_value(
+            table.get("enabled", True), "[tool.filepawl.length].enabled"
+        ),
     )
 
 
@@ -256,17 +279,19 @@ def _build_dircount(table: object) -> DircountPolicy:
         return DircountPolicy()
     if not isinstance(table, dict):
         raise ConfigError("[tool.filepawl.dircount] must be a table")
-    _check_keys(table, _DIRCOUNT_KEYS, "[tool.filepawl.dircount]")
-    exclude = _str_list(
+    check_keys(table, _DIRCOUNT_KEYS, "[tool.filepawl.dircount]")
+    exclude = str_list(
         table.get("exclude", ["__init__.py"]), "[tool.filepawl.dircount].exclude"
     )
     return DircountPolicy(
-        cap=_int(table.get("cap", 15), "[tool.filepawl.dircount].cap"),
-        cap_tests=_int(
+        cap=int_value(table.get("cap", 15), "[tool.filepawl.dircount].cap"),
+        cap_tests=int_value(
             table.get("cap_tests", 30), "[tool.filepawl.dircount].cap_tests"
         ),
         exclude=tuple(exclude),
-        enabled=_bool(table.get("enabled", True), "[tool.filepawl.dircount].enabled"),
+        enabled=bool_value(
+            table.get("enabled", True), "[tool.filepawl.dircount].enabled"
+        ),
     )
 
 
@@ -276,17 +301,17 @@ def _build_barrels(table: object) -> BarrelsPolicy:
     where = "[tool.filepawl.barrels]"
     if not isinstance(table, dict):
         raise ConfigError(f"{where} must be a table")
-    _check_keys(table, _BARRELS_KEYS, where)
+    check_keys(table, _BARRELS_KEYS, where)
     return BarrelsPolicy(
-        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
-        forwarders=_str_list(table.get("forwarders", ["**"]), f"{where}.forwarders"),
-        module_exempt=_build_exempt(
+        include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        forwarders=str_list(table.get("forwarders", ["**"]), f"{where}.forwarders"),
+        module_exempt=exempt_table(
             table.get("module_exempt"), "[tool.filepawl.barrels.module_exempt]"
         ),
-        forwarder_exempt=_build_exempt(
+        forwarder_exempt=exempt_table(
             table.get("forwarder_exempt"), "[tool.filepawl.barrels.forwarder_exempt]"
         ),
-        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+        enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
     )
 
 
@@ -296,12 +321,12 @@ def _build_nesting(table: object) -> NestingPolicy:
     where = "[tool.filepawl.nesting]"
     if not isinstance(table, dict):
         raise ConfigError(f"{where} must be a table")
-    _check_keys(table, _NESTING_KEYS, where)
+    check_keys(table, _NESTING_KEYS, where)
     return NestingPolicy(
-        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
-        max_depth=_int(table.get("max_depth", 4), f"{where}.max_depth"),
-        exempt=_build_exempt(table.get("exempt"), "[tool.filepawl.nesting.exempt]"),
-        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+        include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        max_depth=int_value(table.get("max_depth", 4), f"{where}.max_depth"),
+        exempt=exempt_table(table.get("exempt"), "[tool.filepawl.nesting.exempt]"),
+        enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
     )
 
 
@@ -311,11 +336,11 @@ def _build_returns(table: object) -> ReturnsPolicy:
     where = "[tool.filepawl.returns]"
     if not isinstance(table, dict):
         raise ConfigError(f"{where} must be a table")
-    _check_keys(table, _RETURNS_KEYS, where)
+    check_keys(table, _RETURNS_KEYS, where)
     return ReturnsPolicy(
-        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
-        exempt=_build_exempt(table.get("exempt"), "[tool.filepawl.returns.exempt]"),
-        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+        include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        exempt=exempt_table(table.get("exempt"), "[tool.filepawl.returns.exempt]"),
+        enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
     )
 
 
@@ -325,11 +350,11 @@ def _build_named_results(table: object) -> NamedResultsPolicy:
     where = "[tool.filepawl.named_results]"
     if not isinstance(table, dict):
         raise ConfigError(f"{where} must be a table")
-    _check_keys(table, _NAMED_RESULTS_KEYS, where)
+    check_keys(table, _NAMED_RESULTS_KEYS, where)
     return NamedResultsPolicy(
-        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
-        exclude=_str_list(table.get("exclude", []), f"{where}.exclude"),
-        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+        include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        exclude=str_list(table.get("exclude", []), f"{where}.exclude"),
+        enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
     )
 
 
@@ -339,48 +364,23 @@ def _build_handlers(table: object) -> HandlersPolicy:
     where = "[tool.filepawl.handlers]"
     if not isinstance(table, dict):
         raise ConfigError(f"{where} must be a table")
-    _check_keys(table, _HANDLERS_KEYS, where)
+    check_keys(table, _HANDLERS_KEYS, where)
     return HandlersPolicy(
-        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
-        exempt=_build_exempt(table.get("exempt"), "[tool.filepawl.handlers.exempt]"),
-        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+        include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        exempt=exempt_table(table.get("exempt"), "[tool.filepawl.handlers.exempt]"),
+        enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
     )
 
 
-def _build_exempt(
-    table: object, where: str = "[tool.filepawl.exempt]"
-) -> dict[str, str]:
+def _build_absence(table: object) -> AbsencePolicy:
     if table is None:
-        return {}
+        return AbsencePolicy()
+    where = "[tool.filepawl.absence]"
     if not isinstance(table, dict):
         raise ConfigError(f"{where} must be a table")
-    result: dict[str, str] = {}
-    for key, value in table.items():
-        if not isinstance(value, str):
-            raise ConfigError(f"{where}.{key!r} must be a string reason")
-        result[key] = value
-    return result
-
-
-def _check_keys(table: dict[str, object], allowed: tuple[str, ...], where: str) -> None:
-    for key in table:
-        if key not in allowed:
-            raise ConfigError(f"unknown key {key!r} in {where}")
-
-
-def _str_list(value: object, where: str) -> tuple[str, ...]:
-    if not isinstance(value, list) or any(not isinstance(v, str) for v in value):
-        raise ConfigError(f"{where} must be a list of strings")
-    return tuple(value)
-
-
-def _int(value: object, where: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ConfigError(f"{where} must be an integer")
-    return value
-
-
-def _bool(value: object, where: str) -> bool:
-    if not isinstance(value, bool):
-        raise ConfigError(f"{where} must be a boolean")
-    return value
+    check_keys(table, _ABSENCE_KEYS, where)
+    return AbsencePolicy(
+        include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        exempt=exempt_table(table.get("exempt"), "[tool.filepawl.absence.exempt]"),
+        enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
+    )
