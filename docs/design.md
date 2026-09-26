@@ -12,6 +12,7 @@ filepawl extracts the engine into one installable package with:
 - a third gate against splits that leave a shell behind (re-export modules and trivial forwarders);
 - a fourth gate against functions that nest blocks too deep;
 - a fifth gate against functions whose returned dict literals disagree on their keys;
+- a sixth gate against functions that return a mapping without naming its shape;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own;
 - a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap, and stops an edit that grows a file over its cap.
@@ -44,6 +45,9 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Returns file set | tree files matched by the gate's own `include`, minus test paths; whole tree every run |
 | Returns shapes | only dict literals whose every key is a string constant; a literal with `**` or any other key is skipped, and a return that is not a dict literal is ignored |
 | Returns exemptions | live in policy, per function, human-edited, with a reason; no command writes them, and a stale one fails |
+| Named-results gate | built-in, enabled by default, Python only (`ast`); fails a return annotation or module-level alias that names a mapping with an `Any` or `object` value type, or a mapping on its own |
+| Named-results file set | tree files matched by the gate's own `include` and by no `exclude` glob, minus test paths; whole tree every run |
+| Named-results exemptions | none; a path leaves scope only through `exclude`, and no alias is sanctioned, parsed JSON included |
 | Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload; it denies an edit that grows a file to over its cap, and warns on any other edit that leaves the file over the watch line or a cap |
 | Plugin | a Claude Code marketplace in this repository with one plugin under `plugin/`; its hook runs the consumer's installed `filepawl`, not a bundled copy |
 
@@ -68,6 +72,7 @@ filepawl/
     barrels.py      # re-export modules and trivial forwarders
     nesting.py      # block depth per function
     returns.py      # key sets of dict-literal returns per function
+    named_results.py  # mappings of unnamed shape in return annotations and aliases
     registry.py     # built-ins + entry points
   movers/
     __init__.py
@@ -140,6 +145,10 @@ include = ["**/*.py"]
 [tool.filepawl.returns.exempt]
 # "path::qualified.name" = reason. Human-edited. A function whose dict returns differ on purpose.
 
+[tool.filepawl.named_results]
+include = ["**/*.py"]
+exclude = []
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -200,7 +209,7 @@ For each directory that contains at least one include-matched file: count the in
 
 ### 6.3 Scope of a run
 
-`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate and the returns gate always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
+`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate, the returns gate and the named-results gate always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
 
 `.pre-commit-hooks.yaml` declares the hook with `pass_filenames: false` and `always_run: true`: one hook covers every language, where HQPTuner today needs a `types: [python]` hook and a `types: [javascript]` hook and checks CSS only from `make`. The whole-tree run is one `git ls-files` plus a line count per file, so nothing is saved by narrowing it.
 
@@ -273,6 +282,33 @@ Exemptions live in `[tool.filepawl.returns.exempt]`, keyed `path::qualified.name
 
 No returns finding is fixable by `accept`, and `accept` leaves state unchanged.
 
+### 6.9 Named-results gate
+
+A function annotated `-> dict[str, Any]` returns a record without naming its fields. Its caller learns the keys by reading the function body, the type checker checks none of them, and a misspelled key is a runtime `KeyError`. An alias such as `Wire = dict[str, Any]` gives the same record a name without giving it a shape. The fix is to name the shape: a dataclass, a `TypedDict`, or a precise value type.
+
+Checked files: tree files matched by `[tool.filepawl.named_results] include` and by no `exclude` glob, minus test paths, since test helpers build payload fixtures on purpose. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6.
+
+A mapping name is `dict`, `Dict`, `Mapping` or `MutableMapping`, and a loose type is `Any` or `object`. Each is recognised written bare or as the last part of an attribute chain, as in `typing.Dict` or `collections.abc.Mapping`. An annotation is loose when, anywhere in it:
+
+- a mapping name stands on its own, not subscripted, as in `-> dict` or `-> Mapping`;
+- a mapping name is subscripted and its value type, the last subscript item, is a loose type, or is a `|` union, `Optional[...]` or `Union[...]` with a loose type among its members at any depth.
+
+Anywhere means every part of the annotation: both sides of `|`, the items of `Optional`, `Union`, `list`, `tuple`, `Callable` and every other subscript, and a string constant, which is parsed as an annotation and read the same way. The items of `Literal[...]` are values, not annotations, and are not read. So `dict[str, Any] | None`, `list[Mapping[str, object]]`, `"dict[str, Any]"`, `dict[str, Any | None]` and `dict[str, dict[str, Any]]` are loose, and `dict[str, int]` and `dict[str, list[Any]]` are not, the last because its value type is a list.
+
+A function, at any nesting depth and named by qualified name as in §6.7, whose return annotation is loose fails. Finding: `path::qualified.name: returns an unnamed mapping (<annotation>) — name its shape`.
+
+A module-level alias whose value is loose fails. Module level means outside every function and class, including inside a module-level `if`, `try` or `with`, so an alias under `if TYPE_CHECKING:` is checked. An alias is any of:
+
+- `X = value`, where each plain-name target is an alias and the value is a subscript, a `|` expression, a name or an attribute chain; a call, a string or any other value is not a type and is not read;
+- `X: TypeAlias = value`, with `TypeAlias` bare or as the last part of an attribute chain, where a string value is read as an annotation;
+- `type X = value`.
+
+Finding: `path::X: aliases an unnamed mapping (<value>) — name its shape`. The annotation or value is printed as `ast.unparse` spells it.
+
+There is no exemption table. Parsed JSON gets no exception: code that passes JSON through names it with a recursive alias whose members are all concrete, `JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]`, which has no loose type in it and passes. A path leaves scope only through `exclude`.
+
+No named-results finding is fixable by `accept`, and `accept` leaves state unchanged.
+
 ## 7. CLI
 
 ```
@@ -335,6 +371,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Barrels gate: port the cases of HQPTuner's `tests/gates/test_no_barrels.py`, Trivia Judge's `tests/gates/test_check_no_barrels.py` and Gauntlet's `no_barrels_selftest.py`. Scope cases are expressed through `forwarders`, and exemption cases through policy.
 - Nesting gate: port the cases of HQPTuner's `tests/gates/test_nesting.py`, Trivia Judge's `tests/gates/test_check_nesting.py` and Gauntlet's `nesting_selftest.py`. Cases on the `depths` seam are expressed as findings at a limit that exposes the measured depth, and exemption cases through policy.
 - Returns gate: one shape passes; two shapes fail and are listed in first-appearance order; key order and repeats do not count; `{}` is a shape; spread and non-string-constant keys are skipped; non-dict and bare returns are ignored; a nested `def`'s returns are its own; methods are named by qualified name; test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
+- Named-results gate: each mapping name, bare and subscripted, with `Any` and with `object`, bare and attribute-qualified; a precise value type passes; a loose type inside a value-type union fails and inside a value-type `list` passes; a loose mapping inside `|`, `Optional`, `list`, `tuple`, `Callable`, a nested mapping and a quoted annotation fails; `Literal` items are not read; async functions, nested functions and methods named by qualified name; each alias form, including under `if TYPE_CHECKING:`; a call or string assignment is not an alias; a class-level or function-level alias is not checked; `exclude`, test paths and files outside `include` are not checked; a file that does not parse is skipped.
 - `accept`: adds, lowers, refuses to raise, drops stale, preserves reason, stable sort.
 - `init`: fresh tree, refuses overwrite, appends policy stub once.
 - `mv`: `command` backend with a fake script; `rope` backend behind `pytest.importorskip("rope")`; stale-ref grep finds a `mock.patch` string.
