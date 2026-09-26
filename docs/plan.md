@@ -159,6 +159,14 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`feat: returns gate`**: `filepawl/gates/returns.py`, registered fifth among built-ins; tests in `tests/test_returns_gate.py`.
 - **`docs: returns in README and changelog`**: `README.md`, `CHANGELOG.md`, version 0.4.0 in `pyproject.toml` and `plugin.json`.
 
+### Handlers gate (spec §6.9)
+
+- **`docs: handlers gate spec`**: `docs/design.md` §1, §2, §3, §4, §6.3, §6.9, §9, §10; this phase.
+- **`chore: policy stub in its own module`**: `DEFAULT_POLICY_STUB` moves from `filepawl/config.py` to `filepawl/stub.py`, so `config.py` stays under the watch line when the handlers policy lands; `filepawl/cli.py` and `tests/test_config.py` import it from there.
+- **`feat: handlers policy`**: `HandlersPolicy` in `filepawl/config.py` (`enabled`, `include`, `exempt`), `handlers` reserved, registry `_is_enabled` branch, policy stub; tests in `tests/test_config.py` and `tests/test_gate_registry.py`.
+- **`feat: handlers gate`**: `filepawl/gates/handlers.py`, registered sixth among built-ins; tests in `tests/test_handlers_gate.py`.
+- **`docs: handlers in README and changelog`**: `README.md`, `CHANGELOG.md`, version 0.5.0 in `pyproject.toml` and `plugin.json`.
+
 ## Verification (orchestrator, end)
 
 ```

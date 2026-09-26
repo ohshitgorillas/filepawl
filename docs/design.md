@@ -13,6 +13,7 @@ filepawl extracts the engine into one installable package with:
 - a fourth gate against functions that nest blocks too deep;
 - a fifth gate against functions whose returned dict literals disagree on their keys;
 - a sixth gate against functions that return a mapping without naming its shape;
+- a seventh gate against functions that return from an exception handler;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own;
 - a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap, and stops an edit that grows a file over its cap.
@@ -48,6 +49,10 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Named-results gate | built-in, enabled by default, Python only (`ast`); fails a return annotation or module-level alias that names a mapping with an `Any` or `object` value type, or a mapping on its own |
 | Named-results file set | tree files matched by the gate's own `include` and by no `exclude` glob, minus test paths; whole tree every run |
 | Named-results exemptions | none; a path leaves scope only through `exclude`, and no alias is sanctioned, parsed JSON included |
+| Handlers gate | built-in, enabled by default, Python only (`ast`); fails a `return` in an `except` or `except*` handler that hands the caller a value |
+| Handlers file set | tree files matched by the gate's own `include`, minus test paths; whole tree every run |
+| Handlers values | `return <expr>` is a value return, `return None` included; a bare `return` fails only in a function that has a value return |
+| Handlers exemptions | live in policy, per function, human-edited, with a reason; no command writes them, and a stale one fails |
 | Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload; it denies an edit that grows a file to over its cap, and warns on any other edit that leaves the file over the watch line or a cap |
 | Plugin | a Claude Code marketplace in this repository with one plugin under `plugin/`; its hook runs the consumer's installed `filepawl`, not a bundled copy |
 
@@ -74,6 +79,7 @@ filepawl/
     nesting.py      # block depth per function
     returns.py      # key sets of dict-literal returns per function
     named_results.py  # mappings of unnamed shape in return annotations and aliases
+    handlers.py     # returns from exception handlers per function
     registry.py     # built-ins + entry points
   movers/
     __init__.py
@@ -150,6 +156,12 @@ include = ["**/*.py"]
 include = ["**/*.py"]
 exclude = []
 
+[tool.filepawl.handlers]
+include = ["**/*.py"]
+
+[tool.filepawl.handlers.exempt]
+# "path::qualified.name" = reason. Human-edited. A function that returns from a handler on purpose.
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -210,7 +222,7 @@ For each directory that contains at least one include-matched file: count the in
 
 ### 6.3 Scope of a run
 
-`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate, the returns gate and the named-results gate always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
+`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate, the returns gate, the named-results gate and the handlers gate always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
 
 `.pre-commit-hooks.yaml` declares the hook with `pass_filenames: false` and `always_run: true`: one hook covers every language, where HQPTuner today needs a `types: [python]` hook and a `types: [javascript]` hook and checks CSS only from `make`. The whole-tree run is one `git ls-files` plus a line count per file, so nothing is saved by narrowing it.
 
@@ -309,6 +321,25 @@ Finding: `path::X: aliases an unnamed mapping (<value>) — name its shape`. The
 There is no exemption table. Parsed JSON gets no exception: code that passes JSON through names it with a recursive alias whose members are all concrete, `JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]`, which has no loose type in it and passes. A path leaves scope only through `exclude`.
 
 No named-results finding is fixable by `accept`, and `accept` leaves state unchanged.
+### 6.10 Handlers gate
+
+A `return` inside an exception handler turns the exception into a value. The caller receives `None`, `False` or an empty result where an error was, and must know to test for it. The exception's type and traceback are gone, and a caller that does not test carries the sentinel on as data. The fix is to let the exception propagate, to raise a narrower one, or to handle it so that the function goes on to its normal return.
+
+Checked files: tree files matched by `[tool.filepawl.handlers] include`, minus test paths, since test helpers catch and return on purpose. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6.
+
+A handler return is a `return` statement anywhere in the body of an `except` or `except*` handler, at any depth of blocks inside that body, including the `try`, `else` and `finally` of a `try` nested in the handler. A value return is `return <expr>`, whatever the expression, so `return None` is a value return. A bare `return` is not.
+
+Returns belong to the innermost function that contains them, as in §6.8. A nested `def` inside a handler is judged on its own: its returns are not the outer function's handler returns, and its value returns do not count toward the outer function. A `lambda` has no `return` statement and is judged on its own, so a `lambda` does not give the outer function a value return. Functions are named by qualified name as in §6.7.
+
+A function fails when it has a handler return that is a value return, or a bare handler return while it also has a value return anywhere outside its nested functions. Finding: `path::qualified.name: returns from an except handler at line N — raise instead of returning a sentinel`, with `lines N, M` listing every failing handler return in source order when there is more than one.
+
+Exemptions live in `[tool.filepawl.handlers.exempt]`, keyed `path::qualified.name`, with a reason. An entry covers every function its key names. The audit covers every entry on every run and reports each finding under path `pyproject.toml`:
+
+- an entry whose path is not a checked file: `names no file`;
+- an entry naming no function in its file: `names no function`;
+- an entry whose functions have no failing handler return: `returns from no handler, so it needs no exemption`.
+
+No handlers finding is fixable by `accept`, and `accept` leaves state unchanged.
 
 ## 7. CLI
 
@@ -373,6 +404,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Nesting gate: port the cases of HQPTuner's `tests/gates/test_nesting.py`, Trivia Judge's `tests/gates/test_check_nesting.py` and Gauntlet's `nesting_selftest.py`. Cases on the `depths` seam are expressed as findings at a limit that exposes the measured depth, and exemption cases through policy.
 - Returns gate: one shape passes; two shapes fail and are listed in first-appearance order; key order and repeats do not count; `{}` is a shape; spread and non-string-constant keys are skipped; non-dict and bare returns are ignored; a nested `def`'s returns are its own; methods are named by qualified name; test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
 - Named-results gate: each mapping name, bare and subscripted, with `Any` and with `object`, bare and attribute-qualified; a precise value type passes; a loose type inside a value-type union fails and inside a value-type `list` passes; a loose mapping inside `|`, `Optional`, `list`, `tuple`, `Callable`, a nested mapping and a quoted annotation fails; `Literal` items are not read; async functions, nested functions and methods named by qualified name; each alias form, including under `if TYPE_CHECKING:`; a call or string assignment is not an alias; a class-level or function-level alias is not checked; `exclude`, test paths and files outside `include` are not checked; a file that does not parse is skipped.
+- Handlers gate: `return <expr>` and `return None` in `except` and `except*` fail; a bare `return` in a handler passes alone and fails beside a value return, including a `return None`; a return deep in blocks inside a handler counts, and one in `try`, `else` or `finally` outside a handler does not; a nested `def` in a handler is judged on its own, and its value returns do not count toward the outer function; a `lambda` gives the outer function no value return; several failing returns are listed by line; methods are named by qualified name; test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
 - `accept`: adds, lowers, refuses to raise, drops stale, preserves reason, stable sort.
 - `init`: fresh tree, refuses overwrite, appends policy stub once.
 - `mv`: `command` backend with a fake script; `rope` backend behind `pytest.importorskip("rope")`; stale-ref grep finds a `mock.patch` string.
