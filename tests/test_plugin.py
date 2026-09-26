@@ -55,8 +55,9 @@ def test_hooks_json_runs_the_script_before_write_edit_and_multiedit() -> None:
 
 def test_no_filepawl_anywhere_is_silent_and_exits_zero(tmp_path: Path) -> None:
     result = run_script(tmp_path / "project", [tmp_path / "empty"])
-    assert result.returncode == 0
-    assert result.stdout == ""
+    fake_filepawl(tmp_path / "onpath", 'echo "path $1"')
+    found = run_script(tmp_path / "project", [tmp_path / "onpath"])
+    assert (result.returncode, result.stdout, found.stdout) == (0, "", "path hook\n")
 
 
 def test_project_venv_is_preferred_over_path(tmp_path: Path) -> None:
@@ -75,5 +76,10 @@ def test_path_is_used_when_the_project_has_no_venv(tmp_path: Path) -> None:
 
 def test_filepawl_exiting_two_does_not_block(tmp_path: Path) -> None:
     fake_filepawl(tmp_path / "onpath", "echo usage >&2; exit 2")
+    direct = subprocess.run(
+        [str(tmp_path / "onpath" / "filepawl"), "hook"],
+        capture_output=True,
+        check=False,
+    )
     result = run_script(tmp_path / "project", [tmp_path / "onpath"])
-    assert result.returncode == 0
+    assert (direct.returncode, result.returncode) == (2, 0)

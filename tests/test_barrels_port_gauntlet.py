@@ -65,6 +65,7 @@ NO_MATCH = "matches no forwarder"
 BARREL = "hooks/barrel.py"
 GOOD = "hooks/good.py"
 UNTOUCHED = "hooks/untouched.py"
+FORWARDING = "hooks/forwarding.py"
 
 
 def _run(
@@ -97,12 +98,14 @@ def test_reexport_module_fails_and_is_named(repo: RepoFactory) -> None:
 
 def test_module_defining_a_function_passes(repo: RepoFactory) -> None:
     """Port of "a module defining a function passes"."""
-    assert _run({GOOD: DEFINES_FUNCTION}, repo) == []
+    files: dict[str, str | int] = {GOOD: DEFINES_FUNCTION, BARREL: REEXPORT}
+    assert _run(files, repo) == [Finding(BARREL, REEXPORT_MSG)]
 
 
 def test_module_defining_a_constant_passes(repo: RepoFactory) -> None:
     """Port of "a module defining a constant passes"."""
-    assert _run({GOOD: DEFINES_CONSTANT}, repo) == []
+    files: dict[str, str | int] = {GOOD: DEFINES_CONSTANT, BARREL: REEXPORT}
+    assert _run(files, repo) == [Finding(BARREL, REEXPORT_MSG)]
 
 
 def test_all_alone_is_not_defining_something(repo: RepoFactory) -> None:
@@ -117,17 +120,23 @@ def test_body_under_main_guard_fails(repo: RepoFactory) -> None:
 
 def test_module_importing_nothing_is_not_a_reexport(repo: RepoFactory) -> None:
     """Port of "a module that imports nothing is not a re-export"."""
-    assert _run({GOOD: NO_IMPORTS}, repo) == []
+    files: dict[str, str | int] = {GOOD: NO_IMPORTS, BARREL: REEXPORT}
+    assert _run(files, repo) == [Finding(BARREL, REEXPORT_MSG)]
 
 
 def test_docstring_only_module_passes(repo: RepoFactory) -> None:
     """Port of "a module of nothing but a docstring passes"."""
-    assert _run({GOOD: NOTHING_AT_ALL}, repo) == []
+    files: dict[str, str | int] = {GOOD: NOTHING_AT_ALL, BARREL: REEXPORT}
+    assert _run(files, repo) == [Finding(BARREL, REEXPORT_MSG)]
 
 
 def test_init_reexporting_package_surface_passes(repo: RepoFactory) -> None:
     """Port of "__init__.py re-exporting a package surface passes"."""
-    assert _run({"scripts/pair/__init__.py": REEXPORT}, repo) == []
+    files: dict[str, str | int] = {
+        "scripts/pair/__init__.py": REEXPORT,
+        BARREL: REEXPORT,
+    }
+    assert _run(files, repo) == [Finding(BARREL, REEXPORT_MSG)]
 
 
 def test_forwarder_fails_and_is_named_with_its_function(repo: RepoFactory) -> None:
@@ -153,34 +162,44 @@ def test_docstring_does_not_save_a_forwarder(repo: RepoFactory) -> None:
 
 def test_keyword_pass_through_is_knowingly_not_caught(repo: RepoFactory) -> None:
     """Port of "a keyword-argument pass-through is knowingly not caught"."""
-    assert _run({GOOD: KEYWORD_FORWARDER}, repo) == []
+    files: dict[str, str | int] = {GOOD: KEYWORD_FORWARDER, FORWARDING: FORWARDER}
+    assert _run(files, repo) == [Finding(f"{FORWARDING}::f", FORWARDS_MSG)]
 
 
 def test_reordered_arguments_are_not_a_forwarder(repo: RepoFactory) -> None:
     """Port of "a method reordering its arguments is not a forwarder"."""
-    assert _run({GOOD: REORDERED}, repo) == []
+    files: dict[str, str | int] = {GOOD: REORDERED, FORWARDING: FORWARDER}
+    assert _run(files, repo) == [Finding(f"{FORWARDING}::f", FORWARDS_MSG)]
 
 
 def test_method_doing_more_passes(repo: RepoFactory) -> None:
     """Port of "a method doing more than returning the call passes"."""
-    assert _run({GOOD: DOES_MORE}, repo) == []
+    files: dict[str, str | int] = {GOOD: DOES_MORE, FORWARDING: FORWARDER}
+    assert _run(files, repo) == [Finding(f"{FORWARDING}::f", FORWARDS_MSG)]
 
 
 def test_method_returning_its_own_expression_passes(repo: RepoFactory) -> None:
     """Port of "a method returning an expression of its own passes"."""
-    assert _run({GOOD: PLAIN_RETURN}, repo) == []
+    files: dict[str, str | int] = {GOOD: PLAIN_RETURN, FORWARDING: FORWARDER}
+    assert _run(files, repo) == [Finding(f"{FORWARDING}::f", FORWARDS_MSG)]
 
 
 def test_exempt_forwarder_passes(repo: RepoFactory) -> None:
     """Port of "an exempt forwarder passes"."""
     exempt = {f"{GOOD}::f": "reaches the private collaborator"}
-    assert _run({GOOD: FORWARDER}, repo, exempt=exempt) == []
+    files: dict[str, str | int] = {GOOD: FORWARDER, FORWARDING: FORWARDER}
+    assert _run(files, repo, exempt=exempt) == [
+        Finding(f"{FORWARDING}::f", FORWARDS_MSG)
+    ]
 
 
 def test_exempt_reexport_module_passes(repo: RepoFactory) -> None:
     """Port of "an exempt re-export module passes"."""
     module_exempt = {BARREL: "the surface is the point"}
-    assert _run({BARREL: REEXPORT}, repo, module_exempt=module_exempt) == []
+    files: dict[str, str | int] = {BARREL: REEXPORT, UNTOUCHED: REEXPORT}
+    assert _run(files, repo, module_exempt=module_exempt) == [
+        Finding(UNTOUCHED, REEXPORT_MSG)
+    ]
 
 
 def test_forwarder_exemption_naming_no_file_is_stale(repo: RepoFactory) -> None:
@@ -232,9 +251,15 @@ def test_live_module_exemption_outside_the_named_set_passes(
     repo: RepoFactory,
 ) -> None:
     """Port of "a live module exemption for a file not on argv passes"."""
-    files: dict[str, str | int] = {UNTOUCHED: REEXPORT, GOOD: DEFINES_FUNCTION}
+    files: dict[str, str | int] = {
+        UNTOUCHED: REEXPORT,
+        GOOD: DEFINES_FUNCTION,
+        BARREL: REEXPORT,
+    }
     module_exempt = {UNTOUCHED: "live"}
-    assert _run(files, repo, names=[GOOD], module_exempt=module_exempt) == []
+    assert _run(files, repo, names=[GOOD], module_exempt=module_exempt) == [
+        Finding(BARREL, REEXPORT_MSG)
+    ]
 
 
 def test_stale_module_exemption_outside_the_named_set_fails(
@@ -252,9 +277,15 @@ def test_live_forwarder_exemption_outside_the_named_set_passes(
     repo: RepoFactory,
 ) -> None:
     """Port of "a live forwarder exemption for a file not on argv passes"."""
-    files: dict[str, str | int] = {UNTOUCHED: FORWARDER, GOOD: DEFINES_FUNCTION}
+    files: dict[str, str | int] = {
+        UNTOUCHED: FORWARDER,
+        GOOD: DEFINES_FUNCTION,
+        FORWARDING: FORWARDER,
+    }
     exempt = {f"{UNTOUCHED}::f": "live"}
-    assert _run(files, repo, names=[GOOD], exempt=exempt) == []
+    assert _run(files, repo, names=[GOOD], exempt=exempt) == [
+        Finding(f"{FORWARDING}::f", FORWARDS_MSG)
+    ]
 
 
 def test_every_offender_is_reported_and_no_compliant_file(

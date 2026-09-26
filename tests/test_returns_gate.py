@@ -53,8 +53,8 @@ class TestShapes:
             '        return {"a": 1, "b": 2}\n'
             '    return {"a": 3, "b": 4}\n'
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": TWO_SHAPES})
+        assert _run(root, _policy()) == [Finding("n.py::f", _shapes("{a, b}", "{a}"))]
 
     def test_two_shapes_fail(self, repo: RepoFactory) -> None:
         root = repo({"m.py": TWO_SHAPES})
@@ -79,8 +79,8 @@ class TestShapes:
             '        return {"a": 1, "b": 2}\n'
             '    return {"b": 1, "a": 2, "a": 3}\n'
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": TWO_SHAPES})
+        assert _run(root, _policy()) == [Finding("n.py::f", _shapes("{a, b}", "{a}"))]
 
     def test_empty_dict_is_a_shape(self, repo: RepoFactory) -> None:
         source = 'def f(c):\n    if c:\n        return {}\n    return {"a": 1}\n'
@@ -94,8 +94,8 @@ class TestShapes:
             '        return {**d, "b": 2}\n'
             '    return {"a": 1}\n'
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": TWO_SHAPES})
+        assert _run(root, _policy()) == [Finding("n.py::f", _shapes("{a, b}", "{a}"))]
 
     def test_non_string_key_literal_is_skipped(self, repo: RepoFactory) -> None:
         source = (
@@ -106,8 +106,8 @@ class TestShapes:
             "        return {1: 1}\n"
             '    return {"a": 1}\n'
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": TWO_SHAPES})
+        assert _run(root, _policy()) == [Finding("n.py::f", _shapes("{a, b}", "{a}"))]
 
     def test_non_dict_and_bare_returns_are_ignored(self, repo: RepoFactory) -> None:
         source = (
@@ -122,8 +122,8 @@ class TestShapes:
             "        return d\n"
             '    return {"a": 1}\n'
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": TWO_SHAPES})
+        assert _run(root, _policy()) == [Finding("n.py::f", _shapes("{a, b}", "{a}"))]
 
     def test_nested_def_returns_are_its_own(self, repo: RepoFactory) -> None:
         source = (
@@ -132,8 +132,8 @@ class TestShapes:
             '        return {"b": 1}\n'
             '    return {"a": 1}\n'
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": TWO_SHAPES})
+        assert _run(root, _policy()) == [Finding("n.py::f", _shapes("{a, b}", "{a}"))]
 
     def test_nested_def_is_checked_under_its_qualified_name(
         self, repo: RepoFactory
@@ -181,8 +181,8 @@ class TestShapes:
 
 class TestFileSet:
     def test_test_paths_are_not_checked(self, repo: RepoFactory) -> None:
-        root = repo({"tests/test_m.py": TWO_SHAPES})
-        assert _run(root, _policy()) == []
+        root = repo({"tests/test_m.py": TWO_SHAPES, "m.py": TWO_SHAPES})
+        assert _run(root, _policy()) == [Finding("m.py::f", _shapes("{a, b}", "{a}"))]
 
     def test_files_outside_include_are_not_checked(self, repo: RepoFactory) -> None:
         root = repo({"a/m.py": TWO_SHAPES, "b/m.py": TWO_SHAPES})
@@ -198,7 +198,9 @@ class TestFileSet:
 class TestExemptions:
     def test_exempt_function_passes(self, repo: RepoFactory) -> None:
         root = repo({"m.py": TWO_SHAPES})
-        assert _run(root, _policy(exempt={"m.py::f": "two message kinds"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(exempt={"m.py::f": "two message kinds"}))
+        assert (plain, exempt) == ([Finding("m.py::f", _shapes("{a, b}", "{a}"))], [])
 
     def test_entry_naming_no_file_fails(self, repo: RepoFactory) -> None:
         root = repo({"m.py": "x = 1\n"})
@@ -228,7 +230,9 @@ class TestExemptions:
     def test_entry_covers_every_function_its_key_names(self, repo: RepoFactory) -> None:
         source = TWO_SHAPES + 'def f():\n    return {"a": 1}\n'
         root = repo({"m.py": source})
-        assert _run(root, _policy(exempt={"m.py::f": "r"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(exempt={"m.py::f": "r"}))
+        assert (plain, exempt) == ([Finding("m.py::f", _shapes("{a, b}", "{a}"))], [])
 
 
 def test_accept_leaves_state_unchanged(repo: RepoFactory) -> None:

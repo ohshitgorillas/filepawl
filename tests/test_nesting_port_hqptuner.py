@@ -186,19 +186,32 @@ def _named(findings: list[Finding], needle: str) -> bool:
 def test_function_at_the_limit_passes(repo: RepoFactory) -> None:
     """Port of test_a_function_at_the_limit_passes."""
     root = repo({"hqptuner/core/deep.py": _function("if", 4)})
-    assert _run(root, _policy()) == []
+    at_limit = _run(root, _policy())
+    under_limit = _run(root, _policy(max_depth=3))
+    assert (at_limit, under_limit) == (
+        [],
+        [_deep("hqptuner/core/deep.py::f", 4, limit=3)],
+    )
 
 
 def test_function_at_the_limit_reports_nothing(repo: RepoFactory) -> None:
     """Port of test_a_function_at_the_limit_prints_nothing."""
     root = repo({"hqptuner/core/deep.py": _function("if", 4)})
-    assert not _run(root, _policy())
+    at_limit = _run(root, _policy())
+    under_limit = _run(root, _policy(max_depth=3))
+    assert (len(at_limit), len(under_limit)) == (0, 1)
 
 
 def test_flat_module_passes(repo: RepoFactory) -> None:
     """Port of test_a_flat_module_passes."""
+    # A limit below zero exposes every function, even one that nests nothing.
     root = repo({"hqptuner/core/flat.py": FLAT})
-    assert _run(root, _policy()) == []
+    at_four = _run(root, _policy())
+    below_zero = _run(root, _policy(max_depth=-1))
+    assert (at_four, below_zero) == (
+        [],
+        [_deep("hqptuner/core/flat.py::f", 0, limit=-1)],
+    )
 
 
 def test_function_one_past_the_limit_fails(repo: RepoFactory) -> None:
@@ -214,7 +227,12 @@ def test_function_one_past_the_limit_fails(repo: RepoFactory) -> None:
 def test_each_block_construct_at_the_limit_passes(repo: RepoFactory, kind: str) -> None:
     """Port of test_each_block_construct_counts_as_one_level_at_the_limit."""
     root = repo({"hqptuner/core/deep.py": _function(kind, 4)})
-    assert _run(root, _policy()) == []
+    at_limit = _run(root, _policy())
+    under_limit = _run(root, _policy(max_depth=3))
+    assert (at_limit, under_limit) == (
+        [],
+        [_deep("hqptuner/core/deep.py::f", 4, limit=3)],
+    )
 
 
 @pytest.mark.parametrize("kind", SYNC_BLOCKS)
@@ -230,7 +248,12 @@ def test_each_block_construct_past_the_limit_fails(
 def test_async_construct_at_the_limit_passes(repo: RepoFactory, kind: str) -> None:
     """Port of test_an_async_construct_at_the_limit_passes_like_its_sync_form."""
     root = repo({"hqptuner/core/deep.py": _function(kind, 4)})
-    assert _run(root, _policy()) == []
+    at_limit = _run(root, _policy())
+    under_limit = _run(root, _policy(max_depth=3))
+    assert (at_limit, under_limit) == (
+        [],
+        [_deep("hqptuner/core/deep.py::f", 4, limit=3)],
+    )
 
 
 @pytest.mark.parametrize("kind", ASYNC_BLOCKS)
@@ -249,7 +272,9 @@ def test_async_function_over_the_limit_is_named(repo: RepoFactory) -> None:
 def test_elif_chain_shares_a_level_with_its_if(repo: RepoFactory) -> None:
     """Port of test_an_elif_chain_shares_a_level_with_its_if."""
     root = repo({"hqptuner/core/chain.py": ELIF_CHAIN_THREE_DEEP})
-    assert _run(root, _policy()) == []
+    at_four = _run(root, _policy())
+    at_two = _run(root, _policy(max_depth=2))
+    assert (at_four, at_two) == ([], [_deep("hqptuner/core/chain.py::f", 3, limit=2)])
 
 
 def test_plain_else_holding_an_if_adds_a_level(repo: RepoFactory) -> None:
@@ -261,7 +286,15 @@ def test_plain_else_holding_an_if_adds_a_level(repo: RepoFactory) -> None:
 def test_nested_def_starts_its_own_count(repo: RepoFactory) -> None:
     """Port of test_a_nested_def_starts_its_own_count."""
     root = repo({"hqptuner/core/inner.py": NESTED_DEF_WITHIN_LIMIT})
-    assert _run(root, _policy()) == []
+    at_four = _run(root, _policy())
+    at_two = _run(root, _policy(max_depth=2))
+    assert (at_four, at_two) == (
+        [],
+        [
+            _deep("hqptuner/core/inner.py::outer", 3, limit=2),
+            _deep("hqptuner/core/inner.py::outer.inner", 3, limit=2),
+        ],
+    )
 
 
 def test_nested_def_over_the_limit_is_named_by_dotted_name(repo: RepoFactory) -> None:
@@ -326,8 +359,12 @@ def test_nested_def_is_measured_apart_from_its_enclosing_function(
 def test_module_with_no_functions_measures_nothing(repo: RepoFactory) -> None:
     """Port of test_depths_finds_nothing_in_a_module_with_no_functions."""
     # A limit below zero exposes every function, even one that nests nothing.
-    root = repo({"hqptuner/core/rates.py": "VALUE = 1\n"})
-    assert _run(root, _policy(max_depth=-1)) == []
+    root = repo(
+        {"hqptuner/core/rates.py": "VALUE = 1\n", "hqptuner/core/flat.py": FLAT}
+    )
+    assert _run(root, _policy(max_depth=-1)) == [
+        _deep("hqptuner/core/flat.py::f", 0, limit=-1)
+    ]
 
 
 # --- exempt --------------------------------------------------------------------
@@ -337,14 +374,20 @@ def test_exempt_function_passes(repo: RepoFactory) -> None:
     """Port of test_an_exempt_function_passes."""
     root = repo({"hqptuner/core/deep.py": _function("if", 5)})
     policy = _policy({"hqptuner/core/deep.py::f": WHY})
-    assert _run(root, policy) == []
+    plain = _run(root, _policy())
+    assert (plain, _run(root, policy)) == (
+        [_deep("hqptuner/core/deep.py::f", 5)],
+        [],
+    )
 
 
 def test_exempt_function_is_not_named(repo: RepoFactory) -> None:
     """Port of test_an_exempt_function_is_not_named_on_stdout."""
     root = repo({"hqptuner/core/deep.py": _function("if", 5)})
     policy = _policy({"hqptuner/core/deep.py::f": WHY})
-    assert not _named(_run(root, policy), "hqptuner/core/deep.py::f")
+    plain = _named(_run(root, _policy()), "hqptuner/core/deep.py::f")
+    exempt = _named(_run(root, policy), "hqptuner/core/deep.py::f")
+    assert (plain, exempt) == (True, False)
 
 
 def test_exemption_excuses_only_the_function_it_names(repo: RepoFactory) -> None:
@@ -359,7 +402,9 @@ def test_exemption_naming_a_dotted_method_excuses_it(repo: RepoFactory) -> None:
     """Port of test_an_exemption_naming_a_dotted_method_excuses_it."""
     root = repo({"hqptuner/core/tuner.py": DEEP_METHOD})
     key = "hqptuner/core/tuner.py::Tuner.set_volume"
-    assert _run(root, _policy({key: "the wire frame nests this far"})) == []
+    plain = _run(root, _policy())
+    exempt = _run(root, _policy({key: "the wire frame nests this far"}))
+    assert (plain, exempt) == ([_deep(key, 5)], [])
 
 
 def test_exemption_whose_file_is_missing_fails(repo: RepoFactory) -> None:
@@ -433,7 +478,10 @@ def test_live_exemption_for_file_not_on_argv_passes(repo: RepoFactory) -> None:
         }
     )
     policy = _policy({"hqptuner/core/untouched.py::f": WHY})
-    assert _run(root, policy, ["hqptuner/core/committed.py"]) == []
+    committed = ["hqptuner/core/committed.py"]
+    plain = _run(root, _policy(), committed)
+    exempt = _run(root, policy, committed)
+    assert (plain, exempt) == ([_deep("hqptuner/core/untouched.py::f", 5)], [])
 
 
 # --- whole tree ----------------------------------------------------------------
@@ -483,4 +531,9 @@ def test_tree_of_shallow_files_passes(repo: RepoFactory) -> None:
             "hqptuner/core/limit.py": _function("if", 4),
         }
     )
-    assert _run(root, _policy()) == []
+    at_four = _run(root, _policy())
+    at_three = _run(root, _policy(max_depth=3))
+    assert (at_four, at_three) == (
+        [],
+        [_deep("hqptuner/core/limit.py::f", 4, limit=3)],
+    )

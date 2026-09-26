@@ -49,6 +49,18 @@ def messages(findings: list[Finding]) -> list[tuple[str, str]]:
     return [(f.path, f.message) for f in findings]
 
 
+#: A source file over the watch line with no entry, set beside a passing case
+#: so the same run shows the gate acting.
+OFFENDER = "pkg/offender.py"
+OFFENDED = [
+    (
+        OFFENDER,
+        f"over watch line {WATCH} ({WATCH + 1} lines); "
+        f"run `filepawl accept {OFFENDER}`",
+    )
+]
+
+
 # --- behavior 1: cap refuses file outright at its own limit per tree --------
 
 
@@ -58,10 +70,10 @@ def test_a_source_file_at_the_cap_passes_without_a_word(repo: Repo) -> None:
     A source file at exactly the cap (500 lines) passes with no findings
     when it has a corresponding entry (since it's also over watch line).
     """
-    root = repo({"pkg/at_the_cap.py": CAP})
+    root = repo({"pkg/at_the_cap.py": CAP, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"pkg/at_the_cap.py": Entry(lines=CAP)})
-    assert LengthGate().run(tree_for(root, pol), pol, state) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, state)) == OFFENDED
 
 
 def test_a_source_file_over_the_cap_is_named_with_its_length_and_the_cap(
@@ -90,9 +102,9 @@ def test_a_test_file_past_the_source_cap_is_held_to_the_wider_test_cap(
     A test file at exactly the test cap (800 lines) passes; the higher
     test cap (not the source cap) applies.
     """
-    root = repo({"tests/test_wide.py": CAP_TESTS})
+    root = repo({"tests/test_wide.py": CAP_TESTS, OFFENDER: WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, State())) == OFFENDED
 
 
 def test_a_test_file_over_the_test_cap_is_named_with_its_length_and_the_test_cap(
@@ -124,9 +136,9 @@ def test_a_source_file_at_the_watch_line_needs_no_entry(repo: Repo) -> None:
     A source file at exactly the watch line (400 lines) passes with no entry
     required in the allowance table.
     """
-    root = repo({"pkg/watched.py": WATCH})
+    root = repo({"pkg/watched.py": WATCH, OFFENDER: WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, State())) == OFFENDED
 
 
 def test_a_watched_file_with_no_entry_is_told_the_length_to_write_down(
@@ -155,10 +167,10 @@ def test_a_watched_file_at_the_length_its_entry_permits_passes(repo: Repo) -> No
 
     A watched file at exactly its allowance entry length passes.
     """
-    root = repo({"pkg/watched.py": 450})
+    root = repo({"pkg/watched.py": 450, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"pkg/watched.py": Entry(lines=450)})
-    assert LengthGate().run(tree_for(root, pol), pol, state) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, state)) == OFFENDED
 
 
 def test_a_watched_file_over_its_entry_is_measured_against_the_entry(
@@ -208,9 +220,9 @@ def test_the_ratchet_does_not_reach_a_test_file_over_the_watch_line(
     A test file at 460 lines (over the 400 watch line) passes because the
     ratchet does not apply to test files.
     """
-    root = repo({"tests/test_long.py": 460})
+    root = repo({"tests/test_long.py": 460, OFFENDER: WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, State())) == OFFENDED
 
 
 # --- behavior 3: table audited off filesystem, not off paths handed --------
@@ -225,12 +237,12 @@ def test_an_entry_the_ratchet_can_enforce_stands_with_no_path_handed_over(
     passes even if no paths are handed to the gate (full audit). This tests
     that the stale audit includes all entries, not just measured paths.
     """
-    root = repo({"pkg/watched.py": 430})
+    root = repo({"pkg/watched.py": 430, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"pkg/watched.py": Entry(lines=430)})
     # Even with an empty measured set, the entry stands if the file is in
     # the tree.
-    assert LengthGate().run(tree_for(root, pol), pol, state) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, state)) == OFFENDED
 
 
 def test_an_entry_naming_no_file_is_refused_by_its_key(repo: Repo) -> None:
@@ -296,9 +308,9 @@ def test_the_command_line_passes_a_file_no_rule_touches(repo: Repo) -> None:
     A simple file with no violations passes (using default empty allowance).
     This translates triviajudge's CLI test to a gate invocation.
     """
-    root = repo({"pkg/named.py": 10})
+    root = repo({"pkg/named.py": 10, OFFENDER: WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, State())) == OFFENDED
 
 
 def test_the_command_line_reports_every_rule_the_file_it_names_breaks(

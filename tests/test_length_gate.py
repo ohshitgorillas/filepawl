@@ -47,10 +47,13 @@ def test_gate_name_is_length() -> None:
 
 
 def test_file_at_cap_passes(repo: Repo) -> None:
-    root = repo({"a.py": CAP})
+    root = repo({"a.py": CAP, "b.py": CAP + 1})
     pol = policy()
-    state = state_for({"a.py": Entry(lines=CAP)})
-    assert LengthGate().run(tree_for(root, pol), pol, state) == []
+    state = state_for({"a.py": Entry(lines=CAP), "b.py": Entry(lines=CAP + 1)})
+    findings = LengthGate().run(tree_for(root, pol), pol, state)
+    assert messages(findings) == [
+        ("b.py", f"over cap {CAP} ({CAP + 1} lines); split it")
+    ]
 
 
 def test_file_over_cap_fails_and_accept_cannot_fix_it(repo: Repo) -> None:
@@ -83,9 +86,12 @@ def test_over_cap_file_also_reports_the_missing_entry(repo: Repo) -> None:
 
 
 def test_test_file_at_tests_cap_passes(repo: Repo) -> None:
-    root = repo({"tests/test_a.py": CAP_TESTS})
+    root = repo({"tests/test_a.py": CAP_TESTS, "tests/test_b.py": CAP_TESTS + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    findings = LengthGate().run(tree_for(root, pol), pol, State())
+    assert messages(findings) == [
+        ("tests/test_b.py", f"test over cap {CAP_TESTS} ({CAP_TESTS + 1} lines)")
+    ]
 
 
 def test_test_file_over_tests_cap_fails(repo: Repo) -> None:
@@ -99,9 +105,15 @@ def test_test_file_over_tests_cap_fails(repo: Repo) -> None:
 
 
 def test_test_file_over_watch_needs_no_entry(repo: Repo) -> None:
-    root = repo({"tests/test_a.py": WATCH + 5})
+    root = repo({"tests/test_a.py": WATCH + 5, "a.py": WATCH + 5})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    findings = LengthGate().run(tree_for(root, pol), pol, State())
+    assert messages(findings) == [
+        (
+            "a.py",
+            f"over watch line {WATCH} ({WATCH + 5} lines); run `filepawl accept a.py`",
+        )
+    ]
 
 
 # --- exempt ------------------------------------------------------------
@@ -123,8 +135,14 @@ def test_exempt_file_skips_only_the_cap_check(repo: Repo) -> None:
 def test_exempt_file_at_its_entry_passes(repo: Repo) -> None:
     root = repo({"big.py": CAP + 10})
     pol = policy(exempt={"big.py": "kept whole"})
+    plain = policy()
     state = state_for({"big.py": Entry(lines=CAP + 10)})
-    assert LengthGate().run(tree_for(root, pol), pol, state) == []
+    exempt = LengthGate().run(tree_for(root, pol), pol, state)
+    held = LengthGate().run(tree_for(root, plain), plain, state)
+    assert (exempt, messages(held)) == (
+        [],
+        [("big.py", f"over cap {CAP} ({CAP + 10} lines); split it")],
+    )
 
 
 def test_exempt_file_may_not_grow(repo: Repo) -> None:
@@ -148,9 +166,15 @@ def test_exempt_naming_a_path_outside_the_tree_is_reported(repo: Repo) -> None:
 
 
 def test_file_at_watch_line_needs_no_entry(repo: Repo) -> None:
-    root = repo({"a.py": WATCH})
+    root = repo({"a.py": WATCH, "b.py": WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    findings = LengthGate().run(tree_for(root, pol), pol, State())
+    assert messages(findings) == [
+        (
+            "b.py",
+            f"over watch line {WATCH} ({WATCH + 1} lines); run `filepawl accept b.py`",
+        )
+    ]
 
 
 def test_file_over_watch_without_entry_names_the_accept_command(repo: Repo) -> None:
@@ -170,8 +194,14 @@ def test_file_over_watch_without_entry_names_the_accept_command(repo: Repo) -> N
 def test_file_equal_to_entry_passes(repo: Repo) -> None:
     root = repo({"a.py": WATCH + 5})
     pol = policy()
-    state = state_for({"a.py": Entry(lines=WATCH + 5)})
-    assert LengthGate().run(tree_for(root, pol), pol, state) == []
+    equal = state_for({"a.py": Entry(lines=WATCH + 5)})
+    smaller = state_for({"a.py": Entry(lines=WATCH + 4)})
+    at_entry = LengthGate().run(tree_for(root, pol), pol, equal)
+    past_entry = LengthGate().run(tree_for(root, pol), pol, smaller)
+    assert (at_entry, messages(past_entry)) == (
+        [],
+        [("a.py", f"grew past allowance ({WATCH + 5} > {WATCH + 4}); split it")],
+    )
 
 
 def test_grown_file_fails_and_accept_cannot_fix_it(repo: Repo) -> None:
@@ -386,9 +416,10 @@ def test_accept_adds_only_within_the_measured_set(repo: Repo) -> None:
 
 
 def test_accept_leaves_unwatched_and_test_files_out_of_the_table(repo: Repo) -> None:
-    root = repo({"a.py": WATCH, "tests/test_a.py": WATCH + 9})
+    root = repo({"a.py": WATCH, "tests/test_a.py": WATCH + 9, "b.py": WATCH + 1})
     pol = policy()
-    assert LengthGate().accept(tree_for(root, pol), pol, State()).allowance == {}
+    accepted = LengthGate().accept(tree_for(root, pol), pol, State())
+    assert accepted.allowance == {"b.py": Entry(lines=WATCH + 1)}
 
 
 def test_accept_adds_an_exempt_file_over_cap(repo: Repo) -> None:

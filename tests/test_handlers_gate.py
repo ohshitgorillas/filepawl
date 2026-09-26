@@ -72,8 +72,8 @@ class TestValueReturns:
             "    finally:\n"
             "        return 3\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_return_deep_inside_handler_counts(self, repo: RepoFactory) -> None:
         source = (
@@ -135,8 +135,8 @@ class TestBareReturns:
             "        return\n"
             "    h()\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_bare_return_beside_value_return_fails(self, repo: RepoFactory) -> None:
         source = (
@@ -222,8 +222,8 @@ class TestHandlerAssignments:
             "        raise\n"
             "    return h()\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_handler_assignment_without_value_return_passes(
         self, repo: RepoFactory
@@ -237,8 +237,8 @@ class TestHandlerAssignments:
             "        return\n"
             "    h(done)\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_every_assignment_form_binds_a_name(self, repo: RepoFactory) -> None:
         source = (
@@ -268,8 +268,8 @@ class TestHandlerAssignments:
             "        out['error'] = 1\n"
             "    return self, out\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_assignment_deep_inside_handler_counts(self, repo: RepoFactory) -> None:
         source = (
@@ -301,8 +301,8 @@ class TestHandlerAssignments:
             "            x = 3\n"
             "    return x\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_returns_and_assignments_are_listed_in_source_order(
         self, repo: RepoFactory
@@ -330,7 +330,9 @@ class TestHandlerAssignments:
             "    return v\n"
         )
         root = repo({"m.py": source})
-        assert _run(root, _policy(exempt={"m.py::f": "r"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(exempt={"m.py::f": "r"}))
+        assert (plain, exempt) == ([Finding("m.py::f", _lines(5))], [])
 
 
 class TestFunctions:
@@ -346,8 +348,8 @@ class TestFunctions:
             "            return 1\n"
             "        inner()\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_nested_value_return_does_not_count_for_outer(
         self, repo: RepoFactory
@@ -361,8 +363,8 @@ class TestFunctions:
             "    except E:\n"
             "        return\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_nested_def_fails_under_its_own_name(self, repo: RepoFactory) -> None:
         source = "def outer():\n" + "".join(
@@ -380,8 +382,8 @@ class TestFunctions:
             "    except E:\n"
             "        return\n"
         )
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
 
     def test_method_and_async_function_are_checked(self, repo: RepoFactory) -> None:
         source = (
@@ -398,8 +400,8 @@ class TestFunctions:
 
 class TestFileSet:
     def test_test_paths_are_not_checked(self, repo: RepoFactory) -> None:
-        root = repo({"tests/test_m.py": VALUE_IN_HANDLER})
-        assert _run(root, _policy()) == []
+        root = repo({"tests/test_m.py": VALUE_IN_HANDLER, "m.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("m.py::f", _lines(5))]
 
     def test_files_outside_include_are_not_checked(self, repo: RepoFactory) -> None:
         root = repo({"a/m.py": VALUE_IN_HANDLER, "b/m.py": VALUE_IN_HANDLER})
@@ -415,7 +417,9 @@ class TestFileSet:
 class TestExemptions:
     def test_exempt_function_passes(self, repo: RepoFactory) -> None:
         root = repo({"m.py": VALUE_IN_HANDLER})
-        assert _run(root, _policy(exempt={"m.py::f": "CLI boundary"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(exempt={"m.py::f": "CLI boundary"}))
+        assert (plain, exempt) == ([Finding("m.py::f", _lines(5))], [])
 
     def test_entry_naming_no_file_fails(self, repo: RepoFactory) -> None:
         root = repo({"m.py": "x = 1\n"})
@@ -448,7 +452,9 @@ class TestExemptions:
     def test_entry_covers_every_function_its_key_names(self, repo: RepoFactory) -> None:
         source = VALUE_IN_HANDLER + "def f():\n    return 1\n"
         root = repo({"m.py": source})
-        assert _run(root, _policy(exempt={"m.py::f": "r"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(exempt={"m.py::f": "r"}))
+        assert (plain, exempt) == ([Finding("m.py::f", _lines(5))], [])
 
 
 def test_accept_leaves_state_unchanged(repo: RepoFactory) -> None:

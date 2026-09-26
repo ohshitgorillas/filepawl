@@ -42,10 +42,12 @@ def test_check_on_a_clean_tree_is_silent_and_exits_zero(
 ) -> None:
     root = repo({"pkg/a.py": 10})
     monkeypatch.chdir(root)
-    assert main(["check"]) == 0
+    status = main(["check"])
     captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    (root / "pkg/a.py").write_text("line\n" * (WATCH + 1), encoding="utf-8")
+    grown = main(["check"])
+    assert (status, captured.out, captured.err, grown) == (0, "", "", 1)
+    assert capsys.readouterr().out.endswith("filepawl accept pkg/a.py\n")
 
 
 def test_check_prints_findings_sorted_then_the_accept_command(
@@ -171,6 +173,12 @@ def test_check_accepts_a_known_mover_name(
     monkeypatch.chdir(root)
     assert main(["check"]) == 0
     assert capsys.readouterr().out == ""
+    pyproject = root / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+    pyproject.write_text(text.replace('"command"', '"nosuch"'), encoding="utf-8")
+    with pytest.raises(SystemExit, match="^2$"):
+        main(["check"])
+    assert "unknown mover" in capsys.readouterr().err
 
 
 # --- accept ------------------------------------------------------------
@@ -232,9 +240,10 @@ def test_accept_drops_a_stale_entry(
     root = repo({"a.py": 10})
     write_state_text(root, 'version = 1\n\n[allowance]\n"gone.py" = { lines = 450 }\n')
     monkeypatch.chdir(root)
+    before = allowance_of(root)
     assert main(["accept"]) == 0
     assert capsys.readouterr().out == ""
-    assert allowance_of(root) == {}
+    assert (before, allowance_of(root)) == ({"gone.py": {"lines": 450}}, {})
 
 
 def test_accept_reason_sets_the_reason_on_that_entry(

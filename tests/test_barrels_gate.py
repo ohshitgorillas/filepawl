@@ -45,8 +45,10 @@ class TestReexportModule:
         assert _run(root, _policy()) == [Finding("shim.py", REEXPORT)]
 
     def test_imports_and_constant_passes(self, repo: RepoFactory) -> None:
-        root = repo({"m.py": "from real import f\nLIMIT = 3\n"})
-        assert _run(root, _policy()) == []
+        root = repo(
+            {"m.py": "from real import f\nLIMIT = 3\n", "shim.py": "import os\n"}
+        )
+        assert _run(root, _policy()) == [Finding("shim.py", REEXPORT)]
 
     def test_imports_and_main_guard_only_fails(self, repo: RepoFactory) -> None:
         source = "import sys\nif __name__ == '__main__':\n    sys.exit(0)\n"
@@ -54,24 +56,29 @@ class TestReexportModule:
         assert _run(root, _policy()) == [Finding("tool.py", REEXPORT)]
 
     def test_package_init_of_imports_passes(self, repo: RepoFactory) -> None:
-        root = repo({"pkg/__init__.py": "from pkg.real import f\n"})
-        assert _run(root, _policy()) == []
+        source = "from pkg.real import f\n"
+        root = repo({"pkg/__init__.py": source, "pkg/shim.py": source})
+        assert _run(root, _policy()) == [Finding("pkg/shim.py", REEXPORT)]
 
     def test_empty_module_passes(self, repo: RepoFactory) -> None:
-        root = repo({"m.py": '"""Nothing."""\n'})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": '"""Nothing."""\n', "shim.py": "import os\n"})
+        assert _run(root, _policy()) == [Finding("shim.py", REEXPORT)]
 
     def test_test_paths_are_not_checked(self, repo: RepoFactory) -> None:
-        root = repo({"tests/helpers.py": "from pkg.real import *\n"})
-        assert _run(root, _policy()) == []
+        source = "from pkg.real import *\n"
+        root = repo({"tests/helpers.py": source, "pkg/shim.py": source})
+        assert _run(root, _policy()) == [Finding("pkg/shim.py", REEXPORT)]
 
     def test_paths_outside_include_are_not_checked(self, repo: RepoFactory) -> None:
-        root = repo({"other/shim.py": "import os\n"})
-        assert _run(root, _policy(include=("pkg/**/*.py",))) == []
+        root = repo({"other/shim.py": "import os\n", "pkg/shim.py": "import os\n"})
+        findings = _run(root, _policy(include=("pkg/**/*.py",)))
+        assert findings == [Finding("pkg/shim.py", REEXPORT)]
 
     def test_exempt_module_passes(self, repo: RepoFactory) -> None:
         root = repo({"shim.py": "import os\n"})
-        assert _run(root, _policy(module_exempt={"shim.py": "why"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(module_exempt={"shim.py": "why"}))
+        assert (plain, exempt) == ([Finding("shim.py", REEXPORT)], [])
 
 
 class TestForwarder:
@@ -90,23 +97,23 @@ class TestForwarder:
 
     def test_reordered_arguments_pass(self, repo: RepoFactory) -> None:
         source = "def f(self, a, b):\n    return self.o.f(b, a)\n"
-        root = repo({"a.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"a.py": source, "b.py": FORWARDING_METHOD})
+        assert _run(root, _policy()) == [Finding("b.py::f", FORWARDER)]
 
     def test_keyword_argument_passes(self, repo: RepoFactory) -> None:
         source = "def f(self, a):\n    return self.o.f(a, scope=1)\n"
-        root = repo({"a.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"a.py": source, "b.py": FORWARDING_METHOD})
+        assert _run(root, _policy()) == [Finding("b.py::f", FORWARDER)]
 
     def test_work_before_return_passes(self, repo: RepoFactory) -> None:
         source = "def f(self, a):\n    a += 1\n    return self.o.f(a)\n"
-        root = repo({"a.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"a.py": source, "b.py": FORWARDING_METHOD})
+        assert _run(root, _policy()) == [Finding("b.py::f", FORWARDER)]
 
     def test_call_rooted_chain_passes(self, repo: RepoFactory) -> None:
         source = "def f(self, a):\n    return self.http().restore(a)\n"
-        root = repo({"a.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"a.py": source, "b.py": FORWARDING_METHOD})
+        assert _run(root, _policy()) == [Finding("b.py::f", FORWARDER)]
 
     def test_outside_forwarders_scope_passes(self, repo: RepoFactory) -> None:
         root = repo({"api/a.py": FORWARDING_METHOD, "core/b.py": FORWARDING_METHOD})
@@ -115,7 +122,9 @@ class TestForwarder:
 
     def test_exempt_forwarder_passes(self, repo: RepoFactory) -> None:
         root = repo({"a.py": FORWARDING_METHOD})
-        assert _run(root, _policy(forwarder_exempt={"a.py::f": "facade"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(forwarder_exempt={"a.py::f": "facade"}))
+        assert (plain, exempt) == ([Finding("a.py::f", FORWARDER)], [])
 
 
 class TestStaleExemptions:
@@ -158,15 +167,28 @@ class TestStaleExemptions:
 
     def test_audit_ignores_argv_narrowing(self, repo: RepoFactory) -> None:
         root = repo({"a.py": FORWARDING_METHOD, "b.py": "X = 1\n"})
-        policy = _policy(forwarder_exempt={"a.py::f": "facade"})
-        tree = build_tree(root, policy, ["b.py"])
-        assert BarrelsGate().run(tree, policy, State()) == []
+        live = _policy(forwarder_exempt={"a.py::f": "facade"})
+        stale = _policy(forwarder_exempt={"a.py::f": "facade", "a.py::g": "gone"})
+        runs = [
+            BarrelsGate().run(build_tree(root, policy, ["b.py"]), policy, State())
+            for policy in (live, stale)
+        ]
+        assert runs == [
+            [],
+            [
+                Finding(
+                    "pyproject.toml",
+                    "[tool.filepawl.barrels.forwarder_exempt] 'a.py::g': "
+                    "matches no forwarder",
+                )
+            ],
+        ]
 
 
 class TestGateShape:
     def test_unparseable_file_is_skipped(self, repo: RepoFactory) -> None:
-        root = repo({"a.py": "def (:\n"})
-        assert _run(root, _policy()) == []
+        root = repo({"a.py": "def (:\n", "shim.py": "import os\n"})
+        assert _run(root, _policy()) == [Finding("shim.py", REEXPORT)]
 
     def test_accept_is_identity(self, repo: RepoFactory) -> None:
         root = repo({"a.py": "X = 1\n"})

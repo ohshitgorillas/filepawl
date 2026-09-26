@@ -308,7 +308,8 @@ def test_state_file_untouched_when_there_is_no_entry(
 
     assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 0
 
-    assert not (root / STATE_FILE).exists()
+    moved = (root / "pkg/b.py").read_text(encoding="utf-8")
+    assert (moved, (root / STATE_FILE).exists()) == ("X = 1\n", False)
     capsys.readouterr()
 
 

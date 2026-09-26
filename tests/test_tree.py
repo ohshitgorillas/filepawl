@@ -82,7 +82,11 @@ def test_glob_match_double_star_suffix(path: str) -> None:
 
 
 def test_glob_match_double_star_suffix_does_not_match_sibling_prefix() -> None:
-    assert not glob_match("tests/**", "testsx/a.py")
+    matches = (
+        glob_match("tests/**", "tests/a.py"),
+        glob_match("tests/**", "testsx/a.py"),
+    )
+    assert matches == (True, False)
 
 
 def test_glob_match_star_does_not_cross_slash() -> None:
@@ -91,7 +95,10 @@ def test_glob_match_star_does_not_cross_slash() -> None:
 
 
 def test_glob_match_no_match_wrong_extension() -> None:
-    assert not glob_match("**/*.py", "a.txt")
+    assert (glob_match("**/*.py", "a.py"), glob_match("**/*.py", "a.txt")) == (
+        True,
+        False,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -282,8 +289,8 @@ def test_build_tree_selected_ignores_paths_not_in_files(
     repo: Callable[[dict[str, str | int]], Path],
 ) -> None:
     root = repo({"a.py": 1, "README.md": "hi\n"})
-    tree = build_tree(root, _make_policy(), paths=["README.md", "nope.py"])
-    assert tree.selected == ()
+    tree = build_tree(root, _make_policy(), paths=["README.md", "nope.py", "a.py"])
+    assert tree.selected == ("a.py",)
 
 
 def test_build_tree_languages_carries_include_globs(

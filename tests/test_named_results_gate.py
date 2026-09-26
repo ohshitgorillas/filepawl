@@ -93,12 +93,14 @@ class TestAnnotations:
         ],
     )
     def test_named_annotation_passes(self, repo: RepoFactory, annotation: str) -> None:
-        root = repo({"m.py": f"def f() -> {annotation}: ...\n"})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": f"def f() -> {annotation}: ...\n", "n.py": LOOSE})
+        assert _run(root, _policy()) == [Finding("n.py::f", _returns("dict[str, Any]"))]
 
     def test_unannotated_function_passes(self, repo: RepoFactory) -> None:
-        root = repo({"m.py": "def f(x: dict[str, Any]):\n    return x\n"})
-        assert _run(root, _policy()) == []
+        root = repo(
+            {"m.py": "def f(x: dict[str, Any]):\n    return x\n", "n.py": LOOSE}
+        )
+        assert _run(root, _policy()) == [Finding("n.py::f", _returns("dict[str, Any]"))]
 
 
 class TestFunctions:
@@ -180,14 +182,14 @@ class TestAliases:
         ],
     )
     def test_other_assignments_pass(self, repo: RepoFactory, source: str) -> None:
-        root = repo({"m.py": source})
-        assert _run(root, _policy()) == []
+        root = repo({"m.py": source, "n.py": LOOSE})
+        assert _run(root, _policy()) == [Finding("n.py::f", _returns("dict[str, Any]"))]
 
 
 class TestFileSet:
     def test_test_paths_are_not_checked(self, repo: RepoFactory) -> None:
-        root = repo({"tests/test_m.py": LOOSE})
-        assert _run(root, _policy()) == []
+        root = repo({"tests/test_m.py": LOOSE, "m.py": LOOSE})
+        assert _run(root, _policy()) == [Finding("m.py::f", _returns("dict[str, Any]"))]
 
     def test_files_outside_include_are_not_checked(self, repo: RepoFactory) -> None:
         root = repo({"a/m.py": LOOSE, "b/m.py": LOOSE})

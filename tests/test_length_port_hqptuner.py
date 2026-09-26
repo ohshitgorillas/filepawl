@@ -50,14 +50,30 @@ def messages(findings: list[Finding]) -> list[tuple[str, str]]:
     return [(f.path, f.message) for f in findings]
 
 
+#: A source file over the watch line with no entry, set beside a passing case
+#: so the same run shows the gate acting.
+OFFENDER = "hqptuner/offender.py"
+OFFENDED = [
+    (
+        OFFENDER,
+        f"over watch line {WATCH} ({WATCH + 1} lines); "
+        f"run `filepawl accept {OFFENDER}`",
+    )
+]
+
+
+def named(findings: list[Finding], path: str) -> bool:
+    return any(f.path == path for f in findings)
+
+
 # --- cap and ratchet basics -------------------------------------------------------
 
 
 def test_a_short_source_file_with_no_allowance_entry_passes(repo: Repo) -> None:
     """test_a_short_source_file_with_no_allowance_entry_passes"""
-    root = repo({"hqptuner/small.py": 12})
+    root = repo({"hqptuner/small.py": 12, OFFENDER: WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, State())) == OFFENDED
 
 
 def test_a_source_file_exactly_at_the_watch_line_passes_with_no_allowance_entry(
@@ -67,9 +83,9 @@ def test_a_source_file_exactly_at_the_watch_line_passes_with_no_allowance_entry(
 
     The watch line is a threshold to exceed, not to reach: WATCH is still quiet.
     """
-    root = repo({"hqptuner/borderline.py": WATCH})
+    root = repo({"hqptuner/borderline.py": WATCH, OFFENDER: WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, State())) == OFFENDED
 
 
 def test_a_source_file_over_the_watch_line_with_no_allowance_entry_fails(
@@ -95,10 +111,10 @@ def test_a_source_file_over_the_watch_line_with_no_allowance_entry_is_named_on_s
 
 def test_a_source_file_matching_its_allowance_exactly_passes(repo: Repo) -> None:
     """test_a_source_file_matching_its_allowance_exactly_passes"""
-    root = repo({"hqptuner/known_long.py": WATCH + 5})
+    root = repo({"hqptuner/known_long.py": WATCH + 5, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"hqptuner/known_long.py": Entry(lines=WATCH + 5)})
-    assert LengthGate().run(tree_for(root, pol), pol, state) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, state)) == OFFENDED
 
 
 def test_a_source_file_matching_its_allowance_exactly_is_not_named_on_stdout(
@@ -108,11 +124,12 @@ def test_a_source_file_matching_its_allowance_exactly_is_not_named_on_stdout(
 
     An allowance is silent — it permits the length rather than warning about it.
     """
-    root = repo({"hqptuner/known_long.py": WATCH + 5})
+    root = repo({"hqptuner/known_long.py": WATCH + 5, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"hqptuner/known_long.py": Entry(lines=WATCH + 5)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert not any(f.path == "hqptuner/known_long.py" for f in findings)
+    shown = (named(findings, OFFENDER), named(findings, "hqptuner/known_long.py"))
+    assert shown == (True, False)
 
 
 def test_a_source_file_longer_than_its_allowance_fails(repo: Repo) -> None:
@@ -209,14 +226,23 @@ def test_a_live_allowance_for_a_file_not_passed_on_argv_passes(
 
     A partial commit reads the untouched file from disk and finds its entry still true.
     """
-    root = repo({"hqptuner/untouched.py": WATCH + 5, "hqptuner/committed.py": 10})
+    root = repo(
+        {
+            "hqptuner/untouched.py": WATCH + 5,
+            "hqptuner/committed.py": 10,
+            OFFENDER: WATCH + 1,
+        }
+    )
     pol = policy()
     state = state_for({"hqptuner/untouched.py": Entry(lines=WATCH + 5)})
-    # Only measure committed.py but state has entry for untouched.py
-    tree = tree_for(root, pol, ["hqptuner/committed.py"])
+    # Only measure the committed files but state has entry for untouched.py
+    tree = tree_for(root, pol, ["hqptuner/committed.py", OFFENDER])
     findings = LengthGate().run(tree, pol, state)
     # No finding for untouched.py since it matches its entry
-    assert not any(f.path == "hqptuner/untouched.py" for f in findings)
+    assert (named(findings, OFFENDER), named(findings, "hqptuner/untouched.py")) == (
+        True,
+        False,
+    )
 
 
 def test_an_allowance_for_a_file_back_under_the_watch_line_fails_as_stale(
@@ -316,19 +342,19 @@ def test_a_test_file_over_the_watch_line_passes_with_no_allowance_entry(
     Suites sit outside the ratchet: a flat list of cases has no missing abstraction
     to surface.
     """
-    root = repo({"tests/test_many_cases.py": WATCH + 10})
+    root = repo({"tests/test_many_cases.py": WATCH + 10, OFFENDER: WATCH + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert len(findings) == 0
+    assert messages(findings) == OFFENDED
 
 
 def test_a_test_file_under_the_eight_hundred_line_cap_passes(
     repo: Repo,
 ) -> None:
     """test_a_test_file_under_the_eight_hundred_line_cap_passes"""
-    root = repo({"tests/test_many_cases.py": CAP_TESTS - 1})
+    root = repo({"tests/test_many_cases.py": CAP_TESTS - 1, OFFENDER: WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, State())) == OFFENDED
 
 
 def test_a_test_file_over_the_eight_hundred_line_cap_fails(
@@ -396,7 +422,11 @@ def test_a_compliant_file_beside_an_offender_is_not_named_on_stdout(
     )
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert not any(f.path == "hqptuner/fine.py" for f in findings)
+    shown = (
+        named(findings, "hqptuner/creeping.py"),
+        named(findings, "hqptuner/fine.py"),
+    )
+    assert shown == (True, False)
 
 
 def test_a_source_file_exactly_at_the_hard_cap_passes_with_a_matching_allowance(
@@ -407,10 +437,10 @@ def test_a_source_file_exactly_at_the_hard_cap_passes_with_a_matching_allowance(
     CAP is the cap, not the first line past it: an allowance still buys the file its
     length.
     """
-    root = repo({"hqptuner/at_the_cap.py": CAP})
+    root = repo({"hqptuner/at_the_cap.py": CAP, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"hqptuner/at_the_cap.py": Entry(lines=CAP)})
-    assert LengthGate().run(tree_for(root, pol), pol, state) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, state)) == OFFENDED
 
 
 def test_a_test_file_exactly_at_the_eight_hundred_line_cap_passes(
@@ -420,6 +450,6 @@ def test_a_test_file_exactly_at_the_eight_hundred_line_cap_passes(
 
     CAP_TESTS is the cap suites are held to, and reaching it is not exceeding it.
     """
-    root = repo({"tests/test_many_cases.py": CAP_TESTS})
+    root = repo({"tests/test_many_cases.py": CAP_TESTS, OFFENDER: WATCH + 1})
     pol = policy()
-    assert LengthGate().run(tree_for(root, pol), pol, State()) == []
+    assert messages(LengthGate().run(tree_for(root, pol), pol, State())) == OFFENDED

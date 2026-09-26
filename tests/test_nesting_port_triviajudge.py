@@ -231,7 +231,10 @@ def test_a_function_is_reported_under_its_dotted_name_and_measured_on_its_own(
 
 def test_a_function_at_the_limit_passes_without_a_word(repo: RepoFactory) -> None:
     """Port of `test_a_function_at_the_limit_passes_without_a_word`."""
-    assert _run(repo({DEEP: FOUR_DEEP})) == []
+    root = repo({DEEP: FOUR_DEEP})
+    at_limit = _run(root)
+    under_limit = _run(root, max_depth=3)
+    assert (at_limit, under_limit) == ([], [Finding(f"{DEEP}::f", _deep(4, 3))])
 
 
 def test_a_deep_function_is_refused_by_file_line_name_and_depth(
@@ -250,7 +253,9 @@ def test_an_exemption_on_the_site_itself_silences_the_refusal(
 ) -> None:
     """Port of `test_an_exemption_on_the_site_itself_silences_the_refusal`."""
     root = repo({DEEP: FIVE_DEEP})
-    assert _run(root, exempt={f"{DEEP}::f": REASON}) == []
+    plain = _run(root)
+    exempt = _run(root, exempt={f"{DEEP}::f": REASON})
+    assert (plain, exempt) == ([Finding(f"{DEEP}::f", _deep(5))], [])
 
 
 # --- behavior 4: an exemption is audited off the filesystem -------------------
@@ -265,7 +270,9 @@ def test_an_exemption_still_excusing_a_deep_site_is_silent_though_argv_is_empty(
     leave empty; the audit is the same.
     """  # noqa: E501
     root = repo({DEEP: FIVE_DEEP})
-    assert _run(root, exempt={f"{DEEP}::f": REASON}) == []
+    plain = _run(root)
+    exempt = _run(root, exempt={f"{DEEP}::f": REASON})
+    assert (plain, exempt) == ([Finding(f"{DEEP}::f", _deep(5))], [])
 
 
 def test_an_exemption_naming_no_file_is_refused_by_its_key(

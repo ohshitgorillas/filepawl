@@ -255,27 +255,33 @@ def test_exempt_test_file_growing_over_its_cap_is_not_denied(
     root = repo(
         {
             "tests/test_a.py": CAP_TESTS,
+            "tests/test_b.py": CAP_TESTS,
             "pyproject.toml": '[tool.filepawl.exempt]\n"tests/test_a.py" = "oracle"\n',
         }
     )
-    assert (
-        run_hook(
-            edit(root, "tests/test_a.py", "line 1\n", lines(2)), monkeypatch, capsys
-        )
-        is None
+    exempt = run_hook(
+        edit(root, "tests/test_a.py", "line 1\n", lines(2)), monkeypatch, capsys
+    )
+    reason = run_hook_denied(
+        edit(root, "tests/test_b.py", "line 1\n", lines(2)), monkeypatch, capsys
+    )
+    assert exempt is None
+    assert reason.startswith(
+        f"tests/test_b.py: this edit takes it {CAP_TESTS} → {CAP_TESTS + 1} lines"
     )
 
 
 def test_test_file_over_watch_is_silent(
     repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = repo({"tests/test_a.py": WATCH + 10})
-    assert (
-        run_hook(
-            edit(root, "tests/test_a.py", "line 1\n", lines(2)), monkeypatch, capsys
-        )
-        is None
+    root = repo({"tests/test_a.py": WATCH + 10, "a.py": WATCH + 10})
+    test_file = run_hook(
+        edit(root, "tests/test_a.py", "line 1\n", lines(2)), monkeypatch, capsys
     )
+    source = run_hook(edit(root, "a.py", "line 1\n", lines(2)), monkeypatch, capsys)
+    assert test_file is None
+    assert source is not None
+    assert source.startswith(f"a.py: goes {WATCH + 10} → {WATCH + 11} lines")
 
 
 # --- projection ----------------------------------------------------------
@@ -328,9 +334,11 @@ def test_under_the_watch_line_is_silent(
     repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = repo({"a.py": 10})
-    assert (
-        run_hook(edit(root, "a.py", "line 1\n", lines(5)), monkeypatch, capsys) is None
-    )
+    under = run_hook(edit(root, "a.py", "line 1\n", lines(5)), monkeypatch, capsys)
+    over = run_hook(edit(root, "a.py", "line 1\n", lines(WATCH)), monkeypatch, capsys)
+    assert under is None
+    assert over is not None
+    assert over.startswith(f"a.py: goes 10 → {WATCH + 9} lines, over watch line")
 
 
 def test_edit_shrinking_under_the_watch_line_is_silent(
@@ -338,7 +346,11 @@ def test_edit_shrinking_under_the_watch_line_is_silent(
 ) -> None:
     root = repo({"a.py": WATCH + 1})
     with_allowance(root, "a.py", WATCH + 1)
-    assert run_hook(edit(root, "a.py", "line 1\n", ""), monkeypatch, capsys) is None
+    shrunk = run_hook(edit(root, "a.py", "line 1\n", ""), monkeypatch, capsys)
+    kept = run_hook(edit(root, "a.py", "line 1\n", "one\n"), monkeypatch, capsys)
+    assert shrunk is None
+    assert kept is not None
+    assert kept.startswith(f"a.py: in the length ratchet at {WATCH + 1} lines")
 
 
 def test_other_tools_are_ignored(
@@ -350,16 +362,23 @@ def test_other_tools_are_ignored(
         "tool_name": "Read",
         "tool_input": {"file_path": str(root / "a.py")},
     }
-    assert run_hook(payload, monkeypatch, capsys) is None
+    read = run_hook(payload, monkeypatch, capsys)
+    edited = run_hook(edit(root, "a.py", "line 1\n", "one\n"), monkeypatch, capsys)
+    assert read is None
+    assert edited is not None
+    assert edited.startswith(f"a.py: goes {CAP + 50} → {CAP + 50} lines")
 
 
 def test_path_outside_every_include_is_ignored(
     repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = repo({"a.py": 1})
-    assert (
-        run_hook(write(root, "notes.md", lines(CAP + 5)), monkeypatch, capsys) is None
+    notes = run_hook(write(root, "notes.md", lines(CAP + 5)), monkeypatch, capsys)
+    reason = run_hook_denied(
+        write(root, "notes.py", lines(CAP + 5)), monkeypatch, capsys
     )
+    assert notes is None
+    assert reason.startswith(f"notes.py: this edit takes it 0 → {CAP + 5} lines")
 
 
 def test_disabled_length_gate_is_silent(
@@ -368,7 +387,11 @@ def test_disabled_length_gate_is_silent(
     root = repo(
         {"a.py": 1, "pyproject.toml": "[tool.filepawl.length]\nenabled = false\n"}
     )
-    assert run_hook(write(root, "b.py", lines(CAP + 5)), monkeypatch, capsys) is None
+    disabled = run_hook(write(root, "b.py", lines(CAP + 5)), monkeypatch, capsys)
+    (root / "pyproject.toml").write_text("", encoding="utf-8")
+    reason = run_hook_denied(write(root, "b.py", lines(CAP + 5)), monkeypatch, capsys)
+    assert disabled is None
+    assert reason.startswith(f"b.py: this edit takes it 0 → {CAP + 5} lines")
 
 
 def test_path_outside_the_repository_is_silent(
@@ -384,7 +407,10 @@ def test_path_outside_the_repository_is_silent(
         "file_path": str(elsewhere / "b.py"),
         "content": lines(CAP + 5),
     }
-    assert run_hook(payload, monkeypatch, capsys) is None
+    outside = run_hook(payload, monkeypatch, capsys)
+    reason = run_hook_denied(write(root, "b.py", lines(CAP + 5)), monkeypatch, capsys)
+    assert outside is None
+    assert reason.startswith(f"b.py: this edit takes it 0 → {CAP + 5} lines")
 
 
 def test_old_string_that_does_not_occur_is_silent(
@@ -392,8 +418,13 @@ def test_old_string_that_does_not_occur_is_silent(
 ) -> None:
     root = repo({"a.py": WATCH + 10})
     with_allowance(root, "a.py", WATCH + 10)
-    assert (
-        run_hook(edit(root, "a.py", "absent\n", lines(50)), monkeypatch, capsys) is None
+    absent = run_hook(edit(root, "a.py", "absent\n", lines(50)), monkeypatch, capsys)
+    present = run_hook(edit(root, "a.py", "line 1\n", lines(50)), monkeypatch, capsys)
+    assert absent is None
+    assert present is not None
+    assert present.startswith(
+        f"a.py: in the length ratchet at {WATCH + 10} lines; this edit takes it "
+        f"{WATCH + 10} → {WATCH + 59}."
     )
 
 
@@ -409,28 +440,45 @@ def test_old_string_that_does_not_occur_is_silent(
 )
 def test_malformed_payload_is_silent(
     payload: object,
+    repo: Repo,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert run_hook(payload, monkeypatch, capsys) is None
+    root = repo({"a.py": 1})
+    malformed = run_hook(payload, monkeypatch, capsys)
+    reason = run_hook_denied(write(root, "b.py", lines(CAP + 5)), monkeypatch, capsys)
+    assert malformed is None
+    assert reason.startswith(f"b.py: this edit takes it 0 → {CAP + 5} lines")
 
 
 def test_directory_outside_any_repository_is_silent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    repo: Repo,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     payload = {
         "cwd": str(tmp_path),
         "tool_name": "Write",
         "tool_input": {"file_path": str(tmp_path / "a.py"), "content": lines(CAP)},
     }
-    assert run_hook(payload, monkeypatch, capsys) is None
+    outside = run_hook(payload, monkeypatch, capsys)
+    repo({"b.py": 1})
+    inside = run_hook(payload, monkeypatch, capsys)
+    assert outside is None
+    assert inside is not None
+    assert inside.startswith(f"a.py: goes 0 → {CAP} lines, over watch line {WATCH}")
 
 
 def test_broken_policy_is_silent(
     repo: Repo, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = repo({"a.py": 1, "pyproject.toml": "[tool.filepawl]\nbogus = 1\n"})
-    assert run_hook(write(root, "a.py", lines(CAP + 5)), monkeypatch, capsys) is None
+    broken = run_hook(write(root, "a.py", lines(CAP + 5)), monkeypatch, capsys)
+    (root / "pyproject.toml").write_text("", encoding="utf-8")
+    reason = run_hook_denied(write(root, "a.py", lines(CAP + 5)), monkeypatch, capsys)
+    assert broken is None
+    assert reason.startswith(f"a.py: this edit takes it 1 → {CAP + 5} lines")
 
 
 def test_broken_state_is_silent(
@@ -438,4 +486,8 @@ def test_broken_state_is_silent(
 ) -> None:
     root = repo({"a.py": 1})
     (root / STATE_FILE).write_text("version = 99\n", encoding="utf-8")
-    assert run_hook(write(root, "a.py", lines(CAP + 5)), monkeypatch, capsys) is None
+    broken = run_hook(write(root, "a.py", lines(CAP + 5)), monkeypatch, capsys)
+    (root / STATE_FILE).unlink()
+    reason = run_hook_denied(write(root, "a.py", lines(CAP + 5)), monkeypatch, capsys)
+    assert broken is None
+    assert reason.startswith(f"a.py: this edit takes it 1 → {CAP + 5} lines")

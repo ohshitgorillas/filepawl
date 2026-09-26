@@ -121,6 +121,12 @@ from hqptuner.core.volume import ramp
 __all__ = ["Tuner", "ramp"]
 """
 
+BALANCE = """
+class Mixer:
+    def set_balance(self, offset):
+        return self.client.set_balance(offset)
+"""
+
 IMPORTS_AND_CONSTANTS = """
 import enum
 
@@ -189,20 +195,35 @@ DEFINES = "the module defines something, so it needs no exemption"
 
 def test_module_defining_a_class_passes(repo: RepoFactory) -> None:
     """Port of test_a_module_defining_a_class_passes_however_many_imports_it_has."""
-    root = repo({"hqptuner/core/codec.py": IMPORTS_AND_A_CLASS})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/codec.py": IMPORTS_AND_A_CLASS,
+            "hqptuner/core/facade.py": BARREL,
+        }
+    )
+    assert _run(root, _policy()) == [Finding("hqptuner/core/facade.py", REEXPORT)]
 
 
 def test_module_defining_only_a_function_passes(repo: RepoFactory) -> None:
     """Port of test_a_module_defining_only_a_function_passes."""
-    root = repo({"hqptuner/core/util.py": IMPORTS_AND_A_FUNCTION})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/util.py": IMPORTS_AND_A_FUNCTION,
+            "hqptuner/core/facade.py": BARREL,
+        }
+    )
+    assert _run(root, _policy()) == [Finding("hqptuner/core/facade.py", REEXPORT)]
 
 
 def test_module_of_imports_and_constants_passes(repo: RepoFactory) -> None:
     """Port of test_a_module_of_imports_and_constants_passes."""
-    root = repo({"hqptuner/core/rates.py": IMPORTS_AND_CONSTANTS})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/rates.py": IMPORTS_AND_CONSTANTS,
+            "hqptuner/core/facade.py": BARREL,
+        }
+    )
+    assert _run(root, _policy()) == [Finding("hqptuner/core/facade.py", REEXPORT)]
 
 
 def test_module_of_imports_defining_nothing_fails(repo: RepoFactory) -> None:
@@ -227,14 +248,19 @@ def test_module_of_imports_all_manifest_and_constant_passes(
     repo: RepoFactory,
 ) -> None:
     """Port of test_a_module_of_imports_an_all_manifest_and_a_constant_passes."""
-    root = repo({"hqptuner/core/rates.py": IMPORTS_ALL_AND_A_CONSTANT})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/rates.py": IMPORTS_ALL_AND_A_CONSTANT,
+            "hqptuner/core/facade.py": BARREL,
+        }
+    )
+    assert _run(root, _policy()) == [Finding("hqptuner/core/facade.py", REEXPORT)]
 
 
 def test_empty_module_with_no_imports_passes(repo: RepoFactory) -> None:
     """Port of test_an_empty_module_with_no_imports_passes."""
-    root = repo({"hqptuner/core/placeholder.py": ""})
-    assert _run(root, _policy()) == []
+    root = repo({"hqptuner/core/placeholder.py": "", "hqptuner/core/facade.py": BARREL})
+    assert _run(root, _policy()) == [Finding("hqptuner/core/facade.py", REEXPORT)]
 
 
 def test_barrel_rule_applies_under_the_api_layer(repo: RepoFactory) -> None:
@@ -245,14 +271,21 @@ def test_barrel_rule_applies_under_the_api_layer(repo: RepoFactory) -> None:
 
 def test_package_init_of_pure_imports_passes(repo: RepoFactory) -> None:
     """Port of test_a_package_init_of_pure_imports_passes."""
-    root = repo({"hqptuner/core/__init__.py": BARREL})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {"hqptuner/core/__init__.py": BARREL, "hqptuner/core/facade.py": BARREL}
+    )
+    assert _run(root, _policy()) == [Finding("hqptuner/core/facade.py", REEXPORT)]
 
 
 def test_package_init_of_imports_and_all_manifest_passes(repo: RepoFactory) -> None:
     """Port of test_a_package_init_of_imports_and_an_all_manifest_passes."""
-    root = repo({"hqptuner/core/__init__.py": BARREL_WITH_ALL})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/__init__.py": BARREL_WITH_ALL,
+            "hqptuner/core/facade.py": BARREL,
+        }
+    )
+    assert _run(root, _policy()) == [Finding("hqptuner/core/facade.py", REEXPORT)]
 
 
 # --- rule 2: trivial forwarders ------------------------------------------------
@@ -316,26 +349,54 @@ def test_module_rooted_forwarder_is_named(repo: RepoFactory) -> None:
 
 def test_pass_through_reordering_parameters_passes(repo: RepoFactory) -> None:
     """Port of test_a_pass_through_whose_call_reorders_the_parameters_passes."""
-    root = repo({"hqptuner/core/tuner.py": REORDERED})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/tuner.py": REORDERED,
+            "hqptuner/core/forwarder.py": BARE_FORWARDER,
+        }
+    )
+    assert _run(root, _policy()) == [
+        Finding("hqptuner/core/forwarder.py::set_volume", FORWARDS)
+    ]
 
 
 def test_method_doing_anything_before_return_passes(repo: RepoFactory) -> None:
     """Port of test_a_method_doing_anything_before_the_return_passes."""
-    root = repo({"hqptuner/core/tuner.py": GUARDED})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/tuner.py": GUARDED,
+            "hqptuner/core/forwarder.py": BARE_FORWARDER,
+        }
+    )
+    assert _run(root, _policy()) == [
+        Finding("hqptuner/core/forwarder.py::set_volume", FORWARDS)
+    ]
 
 
 def test_forwarder_under_the_api_layer_passes(repo: RepoFactory) -> None:
     """Port of test_a_forwarder_under_the_api_layer_passes."""
-    root = repo({"hqptuner/api/routes.py": FORWARDER})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/api/routes.py": FORWARDER,
+            "hqptuner/core/forwarder.py": BARE_FORWARDER,
+        }
+    )
+    assert _run(root, _policy()) == [
+        Finding("hqptuner/core/forwarder.py::set_volume", FORWARDS)
+    ]
 
 
 def test_forwarder_outside_scoped_layers_passes(repo: RepoFactory) -> None:
     """Port of test_a_forwarder_outside_the_scoped_layers_passes."""
-    root = repo({"scripts/probes/probe_volume.py": FORWARDER})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "scripts/probes/probe_volume.py": FORWARDER,
+            "hqptuner/core/forwarder.py": BARE_FORWARDER,
+        }
+    )
+    assert _run(root, _policy()) == [
+        Finding("hqptuner/core/forwarder.py::set_volume", FORWARDS)
+    ]
 
 
 def test_forwarder_rooted_at_non_first_parameter_fails(repo: RepoFactory) -> None:
@@ -348,14 +409,28 @@ def test_call_rooted_at_later_parameter_dropping_it_passes(
     repo: RepoFactory,
 ) -> None:
     """Port of test_a_call_rooted_at_a_later_parameter_that_drops_that_parameter_passes."""  # noqa: E501
-    root = repo({"hqptuner/core/tuner.py": NON_FIRST_PARAMETER_ROOTED_DROPPED})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/tuner.py": NON_FIRST_PARAMETER_ROOTED_DROPPED,
+            "hqptuner/core/forwarder.py": BARE_FORWARDER,
+        }
+    )
+    assert _run(root, _policy()) == [
+        Finding("hqptuner/core/forwarder.py::set_volume", FORWARDS)
+    ]
 
 
 def test_method_returning_attribute_not_call_passes(repo: RepoFactory) -> None:
     """Port of test_a_method_returning_an_attribute_rather_than_a_call_passes."""
-    root = repo({"hqptuner/core/tuner.py": ATTRIBUTE_DELEGATION})
-    assert _run(root, _policy()) == []
+    root = repo(
+        {
+            "hqptuner/core/tuner.py": ATTRIBUTE_DELEGATION,
+            "hqptuner/core/forwarder.py": BARE_FORWARDER,
+        }
+    )
+    assert _run(root, _policy()) == [
+        Finding("hqptuner/core/forwarder.py::set_volume", FORWARDS)
+    ]
 
 
 def test_forwarder_inside_package_init_under_scoped_layer_fails(
@@ -384,16 +459,24 @@ def test_forwarder_rule_applies_in_every_scoped_layer(
 
 def test_exempt_forwarder_passes(repo: RepoFactory) -> None:
     """Port of test_an_exempt_forwarder_passes."""
-    root = repo({"hqptuner/core/tuner.py": FORWARDER})
+    root = repo(
+        {"hqptuner/core/tuner.py": FORWARDER, "hqptuner/core/balance.py": BALANCE}
+    )
     policy = _policy(forwarder_exempt={"hqptuner/core/tuner.py::set_volume": WHY})
-    assert _run(root, policy) == []
+    assert _run(root, policy) == [
+        Finding("hqptuner/core/balance.py::set_balance", FORWARDS)
+    ]
 
 
 def test_exempt_forwarder_is_not_named(repo: RepoFactory) -> None:
     """Port of test_an_exempt_forwarder_is_not_named_on_stdout."""
-    root = repo({"hqptuner/core/tuner.py": FORWARDER})
+    root = repo(
+        {"hqptuner/core/tuner.py": FORWARDER, "hqptuner/core/balance.py": BALANCE}
+    )
     policy = _policy(forwarder_exempt={"hqptuner/core/tuner.py::set_volume": WHY})
-    assert not _named(_run(root, policy), "set_volume")
+    findings = _run(root, policy)
+    named = (_named(findings, "set_balance"), _named(findings, "set_volume"))
+    assert named == (True, False)
 
 
 def test_exemption_excuses_only_the_function_it_names(repo: RepoFactory) -> None:
@@ -505,10 +588,13 @@ def test_live_forwarder_exemption_for_file_not_on_argv_passes(
         {
             "hqptuner/core/untouched.py": FORWARDER,
             "hqptuner/core/committed.py": IMPORTS_AND_A_CLASS,
+            "hqptuner/core/balance.py": BALANCE,
         }
     )
     policy = _policy(forwarder_exempt={"hqptuner/core/untouched.py::set_volume": WHY})
-    assert _run(root, policy, ["hqptuner/core/committed.py"]) == []
+    assert _run(root, policy, ["hqptuner/core/committed.py"]) == [
+        Finding("hqptuner/core/balance.py::set_balance", FORWARDS)
+    ]
 
 
 # --- module_exempt -------------------------------------------------------------
@@ -516,16 +602,21 @@ def test_live_forwarder_exemption_for_file_not_on_argv_passes(
 
 def test_exempt_re_export_module_passes(repo: RepoFactory) -> None:
     """Port of test_an_exempt_re_export_module_passes."""
-    root = repo({"hqptuner/core/facade.py": BARREL})
+    root = repo({"hqptuner/core/facade.py": BARREL, "hqptuner/core/other.py": BARREL})
     policy = _policy(module_exempt={"hqptuner/core/facade.py": PUBLIC})
-    assert _run(root, policy) == []
+    assert _run(root, policy) == [Finding("hqptuner/core/other.py", REEXPORT)]
 
 
 def test_exempt_re_export_module_is_not_named(repo: RepoFactory) -> None:
     """Port of test_an_exempt_re_export_module_is_not_named_on_stdout."""
-    root = repo({"hqptuner/core/facade.py": BARREL})
+    root = repo({"hqptuner/core/facade.py": BARREL, "hqptuner/core/other.py": BARREL})
     policy = _policy(module_exempt={"hqptuner/core/facade.py": PUBLIC})
-    assert not _named(_run(root, policy), "hqptuner/core/facade.py")
+    findings = _run(root, policy)
+    named = (
+        _named(findings, "hqptuner/core/other.py"),
+        _named(findings, "hqptuner/core/facade.py"),
+    )
+    assert named == (True, False)
 
 
 def test_module_exemption_whose_path_is_missing_fails(repo: RepoFactory) -> None:
@@ -601,10 +692,13 @@ def test_live_module_exemption_for_file_not_on_argv_passes(
         {
             "hqptuner/core/untouched.py": BARREL,
             "hqptuner/core/committed.py": IMPORTS_AND_A_FUNCTION,
+            "hqptuner/core/facade.py": BARREL,
         }
     )
     policy = _policy(module_exempt={"hqptuner/core/untouched.py": PUBLIC})
-    assert _run(root, policy, ["hqptuner/core/committed.py"]) == []
+    assert _run(root, policy, ["hqptuner/core/committed.py"]) == [
+        Finding("hqptuner/core/facade.py", REEXPORT)
+    ]
 
 
 # --- whole tree ----------------------------------------------------------------
@@ -620,4 +714,7 @@ def test_tree_with_neither_shape_passes(repo: RepoFactory) -> None:
             "hqptuner/core/__init__.py": BARREL,
         }
     )
-    assert _run(root, _policy()) == []
+    key = "hqptuner/core/guarded.py::set_volume"
+    clean = _run(root, _policy())
+    audited = _run(root, _policy(forwarder_exempt={key: WHY}))
+    assert (clean, audited) == ([], [_stale_forwarder(key, "matches no forwarder")])

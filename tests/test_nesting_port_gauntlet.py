@@ -64,6 +64,7 @@ POLICY_FILE = "pyproject.toml"
 STALE = "[tool.filepawl.nesting.exempt] {!r}: {}"
 
 DEEP = "hooks/deep.py"
+OVER = "hooks/over.py"
 
 
 def _nest(kind: str, depth: int, indent: int = 1) -> list[str]:
@@ -99,7 +100,8 @@ def _run(
 
 def test_function_at_the_limit_passes(repo: RepoFactory) -> None:
     """Port of "a function at the limit passes"."""
-    assert _run({DEEP: _function("if", 4)}, repo) == []
+    files: dict[str, str | int] = {DEEP: _function("if", 4), OVER: _function("if", 5)}
+    assert _run(files, repo) == [Finding(f"{OVER}::f", _deep(5))]
 
 
 def test_function_one_past_the_limit_fails_and_is_named(repo: RepoFactory) -> None:
@@ -113,7 +115,8 @@ def test_function_one_past_the_limit_fails_and_is_named(repo: RepoFactory) -> No
 
 def test_elif_chain_shares_its_ifs_level(repo: RepoFactory) -> None:
     """Port of "an elif chain shares its if's level and passes"."""
-    assert _run({DEEP: ELIF_CHAIN}, repo) == []
+    files: dict[str, str | int] = {DEEP: ELIF_CHAIN, OVER: _function("if", 5)}
+    assert _run(files, repo) == [Finding(f"{OVER}::f", _deep(5))]
 
 
 def test_nested_def_over_the_limit_fails_under_its_dotted_name(
@@ -133,7 +136,8 @@ def test_nested_def_over_the_limit_fails_under_its_dotted_name(
 def test_exempt_function_passes(repo: RepoFactory) -> None:
     """Port of "an exempt function passes"."""
     exempt = {f"{DEEP}::f": "measured on purpose"}
-    assert _run({DEEP: _function("if", 5)}, repo, exempt=exempt) == []
+    files: dict[str, str | int] = {DEEP: _function("if", 5), OVER: _function("if", 5)}
+    assert _run(files, repo, exempt=exempt) == [Finding(f"{OVER}::f", _deep(5))]
 
 
 def test_exemption_for_function_within_the_limit_is_stale(

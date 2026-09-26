@@ -45,22 +45,34 @@ def messages(findings: list[Finding]) -> list[tuple[str, str]]:
     return [(f.path, f.message) for f in findings]
 
 
+#: A source file over the watch line with no entry, set beside a passing case
+#: so the same run shows the gate acting.
+OFFENDER = "hooks/offender.py"
+OFFENDED = [
+    (
+        OFFENDER,
+        f"over watch line {WATCH} ({WATCH + 1} lines); "
+        f"run `filepawl accept {OFFENDER}`",
+    )
+]
+
+
 # Test case 1: "a short source file with no entry passes"
 def test_short_source_file_no_entry_passes(repo: Repo) -> None:
     """A file well under the watch line with no allowance entry passes."""
-    root = repo({"hooks/small.py": 20})
+    root = repo({"hooks/small.py": 20, OFFENDER: WATCH + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert findings == []
+    assert messages(findings) == OFFENDED
 
 
 # Test case 2: "a source file at the watch line passes with no entry"
 def test_source_file_at_watch_line_passes(repo: Repo) -> None:
     """A file exactly at the watch line with no entry passes."""
-    root = repo({"hooks/small.py": WATCH})
+    root = repo({"hooks/small.py": WATCH, OFFENDER: WATCH + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert findings == []
+    assert messages(findings) == OFFENDED
 
 
 # Test case 3: "a source file over the watch line with no entry fails"
@@ -78,11 +90,11 @@ def test_source_file_over_watch_line_fails(repo: Repo) -> None:
 # Test case 4: "a source file matching its allowance exactly passes"
 def test_file_matching_allowance_exactly_passes(repo: Repo) -> None:
     """A file at its exact allowance entry passes."""
-    root = repo({"hooks/long.py": WATCH + 4})
+    root = repo({"hooks/long.py": WATCH + 4, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"hooks/long.py": Entry(lines=WATCH + 4)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert findings == []
+    assert messages(findings) == OFFENDED
 
 
 # Test case 5: "a source file longer than its allowance fails"
@@ -123,12 +135,14 @@ def test_allowance_naming_no_file_fails(repo: Repo) -> None:
 # Test case 8: "a live allowance for a file not on argv passes"
 def test_live_allowance_for_unmeasured_file_passes(repo: Repo) -> None:
     """An allowance for a file not being measured passes when live."""
-    root = repo({"hooks/untouched.py": 437, "hooks/small.py": 20})
+    root = repo({"hooks/untouched.py": 437, "hooks/small.py": 20, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"hooks/untouched.py": Entry(lines=437)})
     # Measure only small.py
-    findings = LengthGate().run(tree_for(root, pol, ["hooks/small.py"]), pol, state)
-    assert findings == []
+    findings = LengthGate().run(
+        tree_for(root, pol, ["hooks/small.py", OFFENDER]), pol, state
+    )
+    assert messages(findings) == OFFENDED
 
 
 # Test case 9: "a stale allowance for a file not on argv still fails"
@@ -168,11 +182,11 @@ def test_allowance_for_file_at_watch_line_fails(repo: Repo) -> None:
 # Test case 12: "a source file at the hard cap passes with a matching allowance"
 def test_file_at_hard_cap_passes(repo: Repo) -> None:
     """A file at the hard cap with a matching entry passes."""
-    root = repo({"hooks/long.py": CAP})
+    root = repo({"hooks/long.py": CAP, OFFENDER: WATCH + 1})
     pol = policy()
     state = state_for({"hooks/long.py": Entry(lines=CAP)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert findings == []
+    assert messages(findings) == OFFENDED
 
 
 # Test case 13: "an allowance cannot sell permission past the hard cap"
@@ -197,19 +211,19 @@ def test_file_over_hard_cap_no_entry_fails(repo: Repo) -> None:
 # Test case 15: "a test file over the watch line passes with no entry"
 def test_test_file_over_watch_line_passes(repo: Repo) -> None:
     """A test file over the watch line but under its cap passes (no ratchet)."""
-    root = repo({"tests/test_many.py": CAP_TESTS - 10})
+    root = repo({"tests/test_many.py": CAP_TESTS - 10, OFFENDER: WATCH + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert findings == []
+    assert messages(findings) == OFFENDED
 
 
 # Test case 16: "a test file at the 800-line cap passes"
 def test_test_file_at_tests_cap_passes(repo: Repo) -> None:
     """A test file at the test cap passes."""
-    root = repo({"tests/test_many.py": CAP_TESTS})
+    root = repo({"tests/test_many.py": CAP_TESTS, OFFENDER: WATCH + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert findings == []
+    assert messages(findings) == OFFENDED
 
 
 # Test case 17: "a test file over the 800-line cap fails"

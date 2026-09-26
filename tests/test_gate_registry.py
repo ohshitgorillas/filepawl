@@ -64,7 +64,9 @@ def test_nesting_disabled_via_policy_nesting_enabled(
     monkeypatch.setattr(registry, "entry_points", lambda group: [])
     policy = dataclasses.replace(default_policy(), nesting=NestingPolicy(enabled=False))
 
-    assert registry.discover_gates(policy) == []
+    enabled = [g.name for g in registry.discover_gates(default_policy())]
+    disabled = [g.name for g in registry.discover_gates(policy)]
+    assert (enabled, disabled) == (["nesting"], [])
 
 
 def test_returns_disabled_via_policy_returns_enabled(
@@ -77,7 +79,9 @@ def test_returns_disabled_via_policy_returns_enabled(
     monkeypatch.setattr(registry, "entry_points", lambda group: [])
     policy = dataclasses.replace(default_policy(), returns=ReturnsPolicy(enabled=False))
 
-    assert registry.discover_gates(policy) == []
+    enabled = [g.name for g in registry.discover_gates(default_policy())]
+    disabled = [g.name for g in registry.discover_gates(policy)]
+    assert (enabled, disabled) == (["returns"], [])
 
 
 def test_named_results_disabled_via_policy_named_results_enabled(
@@ -94,7 +98,9 @@ def test_named_results_disabled_via_policy_named_results_enabled(
         default_policy(), named_results=NamedResultsPolicy(enabled=False)
     )
 
-    assert registry.discover_gates(policy) == []
+    enabled = [g.name for g in registry.discover_gates(default_policy())]
+    disabled = [g.name for g in registry.discover_gates(policy)]
+    assert (enabled, disabled) == (["named_results"], [])
 
 
 def test_handlers_disabled_via_policy_handlers_enabled(
@@ -110,7 +116,9 @@ def test_handlers_disabled_via_policy_handlers_enabled(
     handlers = dataclasses.replace(default_policy().handlers, enabled=False)
     policy = dataclasses.replace(default_policy(), handlers=handlers)
 
-    assert registry.discover_gates(policy) == []
+    enabled = [g.name for g in registry.discover_gates(default_policy())]
+    disabled = [g.name for g in registry.discover_gates(policy)]
+    assert (enabled, disabled) == (["handlers"], [])
 
 
 def test_absence_disabled_via_policy_absence_enabled(

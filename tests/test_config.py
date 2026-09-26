@@ -668,7 +668,8 @@ class TestEnabledFlag:
             enabled = false
             """,
         )
-        assert load_policy(tmp_path).length.enabled is False
+        policy = load_policy(tmp_path)
+        assert (policy.length.enabled, policy.dircount.enabled) == (False, True)
 
     def test_dircount_enabled_can_be_disabled(self, tmp_path: Path) -> None:
         write(
@@ -678,7 +679,8 @@ class TestEnabledFlag:
             enabled = false
             """,
         )
-        assert load_policy(tmp_path).dircount.enabled is False
+        policy = load_policy(tmp_path)
+        assert (policy.dircount.enabled, policy.length.enabled) == (False, True)
 
 
 class TestDefaultPolicyStub:

@@ -71,7 +71,9 @@ class TestDepth:
     @pytest.mark.parametrize("kind", sorted(BLOCKS))
     def test_each_block_at_the_limit_passes(self, repo: RepoFactory, kind: str) -> None:
         root = repo({"m.py": _function(kind, 4)})
-        assert _run(root, _policy()) == []
+        at_limit = _run(root, _policy())
+        under_limit = _run(root, _policy(max_depth=3))
+        assert (at_limit, under_limit) == ([], [Finding("m.py::f", _deep(4, 3))])
 
     @pytest.mark.parametrize("kind", sorted(BLOCKS))
     def test_each_block_past_the_limit_fails(
@@ -81,8 +83,13 @@ class TestDepth:
         assert _run(root, _policy()) == [Finding("m.py::f", _deep(5))]
 
     def test_straight_line_function_passes(self, repo: RepoFactory) -> None:
-        root = repo({"m.py": "def f():\n    return 1\n"})
-        assert _run(root, _policy(max_depth=0)) == []
+        root = repo(
+            {
+                "m.py": "def f():\n    return 1\n",
+                "n.py": "def f():\n    if c:\n        pass\n",
+            }
+        )
+        assert _run(root, _policy(max_depth=0)) == [Finding("n.py::f", _deep(1, 0))]
 
     def test_one_block_is_one_deep(self, repo: RepoFactory) -> None:
         root = repo({"m.py": "def f():\n    if c:\n        pass\n"})
@@ -101,7 +108,9 @@ class TestDepth:
             "        pass\n"
         )
         root = repo({"m.py": source})
-        assert _run(root, _policy(max_depth=1)) == []
+        at_one = _run(root, _policy(max_depth=1))
+        at_zero = _run(root, _policy(max_depth=0))
+        assert (at_one, at_zero) == ([], [Finding("m.py::f", _deep(1, 0))])
 
     def test_if_inside_plain_else_is_a_level(self, repo: RepoFactory) -> None:
         source = (
@@ -155,7 +164,15 @@ class TestNaming:
             "                pass\n"
         )
         root = repo({"m.py": source})
-        assert _run(root, _policy(max_depth=1)) == []
+        at_one = _run(root, _policy(max_depth=1))
+        at_zero = _run(root, _policy(max_depth=0))
+        assert (at_one, at_zero) == (
+            [],
+            [
+                Finding("m.py::outer", _deep(1, 0)),
+                Finding("m.py::outer.inner", _deep(1, 0)),
+            ],
+        )
 
     def test_nested_def_is_reported_under_its_dotted_name(
         self, repo: RepoFactory
@@ -189,12 +206,15 @@ class TestNaming:
     ) -> None:
         source = "if c:\n    def f():\n        if a:\n            pass\n"
         root = repo({"m.py": source})
-        assert _run(root, _policy(max_depth=1)) == []
+        at_one = _run(root, _policy(max_depth=1))
+        at_zero = _run(root, _policy(max_depth=0))
+        assert (at_one, at_zero) == ([], [Finding("m.py::f", _deep(1, 0))])
 
     def test_module_level_nesting_is_not_measured(self, repo: RepoFactory) -> None:
         source = "if a:\n    if b:\n        if c:\n            pass\n"
-        root = repo({"m.py": source})
-        assert _run(root, _policy(max_depth=0)) == []
+        function = "def g():\n    if a:\n        pass\n"
+        root = repo({"m.py": source + function})
+        assert _run(root, _policy(max_depth=0)) == [Finding("m.py::g", _deep(1, 0))]
 
 
 class TestFileSet:
@@ -213,8 +233,8 @@ class TestFileSet:
         assert _run(root, _policy()) == [Finding("ok.py::f", _deep(5))]
 
     def test_non_python_files_are_not_parsed(self, repo: RepoFactory) -> None:
-        root = repo({"notes.txt": "if a:\n"})
-        assert _run(root, _policy()) == []
+        root = repo({"notes.txt": "if a:\n", "ok.py": _function("if", 5)})
+        assert _run(root, _policy()) == [Finding("ok.py::f", _deep(5))]
 
     def test_findings_are_sorted(self, repo: RepoFactory) -> None:
         root = repo({"b.py": _function("if", 5), "a.py": _function("if", 5, "g")})
@@ -227,7 +247,9 @@ class TestFileSet:
 class TestExemptions:
     def test_exempt_function_passes(self, repo: RepoFactory) -> None:
         root = repo({"m.py": _function("if", 5)})
-        assert _run(root, _policy(exempt={"m.py::f": "state machine"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(exempt={"m.py::f": "state machine"}))
+        assert (plain, exempt) == ([Finding("m.py::f", _deep(5))], [])
 
     def test_exemption_names_one_function_only(self, repo: RepoFactory) -> None:
         root = repo({"m.py": _function("if", 5) + _function("if", 5, "g")})
@@ -271,7 +293,9 @@ class TestExemptions:
             "        pass",
         ]
         root = repo({"m.py": "\n".join(lines) + "\n"})
-        assert _run(root, _policy(exempt={"m.py::C.v": "property parser"})) == []
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(exempt={"m.py::C.v": "property parser"}))
+        assert (plain, exempt) == ([Finding("m.py::C.v", _deep(5))], [])
 
 
 def test_limit_is_policy(repo: RepoFactory) -> None:

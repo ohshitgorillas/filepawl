@@ -252,10 +252,10 @@ def test_the_forwarder_rule_reaches_the_trees_it_names_and_no_others(
 
 
 @pytest.mark.parametrize(
-    ("name", "source", "exempt", "module_exempt"),
+    ("name", "source", "exempt", "module_exempt", "site"),
     [
-        (BARREL, IMPORTS_ALONE, {}, {BARREL: REASON}),
-        (MOD, FORWARDER, {MOD_F: REASON}, {}),
+        (BARREL, IMPORTS_ALONE, {}, {BARREL: REASON}, Finding(BARREL, REEXPORT)),
+        (MOD, FORWARDER, {MOD_F: REASON}, {}, Finding(MOD_F, FORWARDS)),
     ],
 )
 def test_an_exempt_site_reports_nothing(
@@ -264,10 +264,17 @@ def test_an_exempt_site_reports_nothing(
     source: str,
     exempt: dict[str, str],
     module_exempt: dict[str, str],
+    site: Finding,
 ) -> None:
-    """Port of `test_an_exempt_site_reports_nothing`."""
+    """Port of `test_an_exempt_site_reports_nothing`.
+
+    The same tree without the exemption reports the site, so the silence is
+    the exemption's.
+    """
     root = repo({name: source})
-    assert _run(root, forwarder_exempt=exempt, module_exempt=module_exempt) == []
+    plain = _run(root)
+    exempted = _run(root, forwarder_exempt=exempt, module_exempt=module_exempt)
+    assert (plain, exempted) == ([site], [])
 
 
 # --- behavior 4: an exemption excusing nothing is itself a failure ------------
@@ -374,5 +381,13 @@ def test_check_prints_every_finding_then_the_count_and_refuses(
 
 
 def test_check_prints_nothing_when_every_file_is_clean(repo: RepoFactory) -> None:
-    """Port of `test_check_prints_nothing_when_every_file_is_clean`."""
-    assert _run(repo({"triviajudge/constants.py": CONSTANT})) == []
+    """Port of `test_check_prints_nothing_when_every_file_is_clean`.
+
+    An exemption on the same clean module is reported stale, so the gate read
+    the tree it stayed silent on.
+    """
+    root = repo({"triviajudge/constants.py": CONSTANT})
+    clean = _run(root)
+    audited = _run(root, module_exempt={"triviajudge/constants.py": REASON})
+    stale = Finding(POLICY_FILE, MODULE_DEFINES.format("triviajudge/constants.py"))
+    assert (clean, audited) == ([], [stale])
