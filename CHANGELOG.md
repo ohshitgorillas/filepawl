@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.0 - 2026-09-25
+
+### Added
+
+- **The returns gate fails functions whose dict returns disagree.** A function that returns dict literals with different key sets on different paths fails.
+- **The returns gate takes a `[tool.filepawl.returns]` policy.** `include`, `exempt`, `enabled`. An exemption that excuses nothing fails.
+- **The `filepawl init` stub gains the returns block.**
+
 ## 0.3.0 - 2026-09-24
 
 ### Added
