@@ -19,10 +19,11 @@ from importlib.metadata import entry_points
 from pathlib import Path
 from typing import TextIO
 
-from filepawl.config import DEFAULT_POLICY_STUB, KNOWN_MOVERS, Policy, load_policy
+from filepawl.config import KNOWN_MOVERS, Policy, load_policy
 from filepawl.errors import ConfigError, FilepawlError
 from filepawl.gates.base import Finding, Gate
 from filepawl.gates.registry import discover_gates
+from filepawl.policy_stub import DEFAULT_POLICY_STUB
 from filepawl.state import STATE_FILE, Entry, State, load_state, write_state
 from filepawl.tree import Tree, build_tree, find_root
 

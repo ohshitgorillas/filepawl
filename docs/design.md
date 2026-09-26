@@ -62,6 +62,7 @@ filepawl/
   cli_mv.py         # the mv command: language block, mover, stale refs, state
   hook.py           # the hook command: edit-time notice (§7.1)
   config.py         # load [tool.filepawl], merge defaults, validate
+  policy_stub.py    # the commented default policy block `init` writes
   state.py          # read/write .filepawl.toml
   tree.py           # git ls-files, include globs, test-path classification
   gates/

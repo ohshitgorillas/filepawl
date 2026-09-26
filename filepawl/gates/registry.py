@@ -76,5 +76,7 @@ def _is_enabled(name: str, policy: Policy) -> bool:
         return policy.nesting.enabled
     if name == "returns":
         return policy.returns.enabled
+    if name == "named_results":
+        return policy.named_results.enabled
     table = policy.gate_tables.get(name, {})
     return table.get("enabled", True) is not False

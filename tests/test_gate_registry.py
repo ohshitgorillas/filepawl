@@ -9,7 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from filepawl.config import NestingPolicy, ReturnsPolicy, default_policy
+from filepawl.config import (
+    NamedResultsPolicy,
+    NestingPolicy,
+    ReturnsPolicy,
+    default_policy,
+)
 from filepawl.errors import ConfigError
 from filepawl.gates import registry
 
@@ -71,6 +76,23 @@ def test_returns_disabled_via_policy_returns_enabled(
     )
     monkeypatch.setattr(registry, "entry_points", lambda group: [])
     policy = dataclasses.replace(default_policy(), returns=ReturnsPolicy(enabled=False))
+
+    assert registry.discover_gates(policy) == []
+
+
+def test_named_results_disabled_via_policy_named_results_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_module(monkeypatch, "fake_named_mod", "FakeNamed", "named_results")
+    monkeypatch.setattr(
+        registry,
+        "_BUILTIN_GATES",
+        (("named_results", "fake_named_mod", "FakeNamed"),),
+    )
+    monkeypatch.setattr(registry, "entry_points", lambda group: [])
+    policy = dataclasses.replace(
+        default_policy(), named_results=NamedResultsPolicy(enabled=False)
+    )
 
     assert registry.discover_gates(policy) == []
 

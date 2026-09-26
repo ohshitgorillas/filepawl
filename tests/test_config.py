@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 
 from filepawl.config import (
-    DEFAULT_POLICY_STUB,
     BarrelsPolicy,
     DircountPolicy,
     LanguagePolicy,
     LengthPolicy,
+    NamedResultsPolicy,
     NestingPolicy,
     Policy,
     ReturnsPolicy,
@@ -19,6 +19,7 @@ from filepawl.config import (
     load_policy,
 )
 from filepawl.errors import ConfigError
+from filepawl.policy_stub import DEFAULT_POLICY_STUB
 
 
 def write(root: Path, text: str) -> None:
@@ -152,6 +153,41 @@ class TestReturnsPolicy:
     def test_stub_carries_the_returns_block(self) -> None:
         assert "# [tool.filepawl.returns]" in DEFAULT_POLICY_STUB
         assert "# [tool.filepawl.returns.exempt]" in DEFAULT_POLICY_STUB
+
+
+class TestNamedResultsPolicy:
+    def test_defaults(self) -> None:
+        assert default_policy().named_results == NamedResultsPolicy(
+            include=("**/*.py",), exclude=(), enabled=True
+        )
+
+    def test_table_is_read(self, tmp_path: Path) -> None:
+        write(
+            tmp_path,
+            "[tool.filepawl.named_results]\n"
+            'include = ["pkg/**/*.py"]\n'
+            'exclude = ["pkg/wire/**"]\n'
+            "enabled = false\n",
+        )
+        policy = load_policy(tmp_path)
+        assert policy.named_results == NamedResultsPolicy(
+            include=("pkg/**/*.py",), exclude=("pkg/wire/**",), enabled=False
+        )
+        assert "named_results" not in policy.gate_tables
+
+    def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
+        write(tmp_path, '[tool.filepawl.named_results]\nexempt = {"a.py::f" = "x"}\n')
+        with pytest.raises(ConfigError, match="unknown key 'exempt'"):
+            load_policy(tmp_path)
+
+    def test_exclude_must_be_a_list_of_strings(self, tmp_path: Path) -> None:
+        write(tmp_path, '[tool.filepawl.named_results]\nexclude = "pkg/**"\n')
+        with pytest.raises(ConfigError, match="must be a list of strings"):
+            load_policy(tmp_path)
+
+    def test_stub_carries_the_named_results_block(self) -> None:
+        assert "# [tool.filepawl.named_results]" in DEFAULT_POLICY_STUB
+        assert "# exclude = []" in DEFAULT_POLICY_STUB
 
 
 class TestDefaultPolicy:

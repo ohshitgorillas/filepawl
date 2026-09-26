@@ -14,7 +14,15 @@ from filepawl.errors import ConfigError
 # about third-party entry-point movers config.py has no visibility into.
 KNOWN_MOVERS = ("rope", "command")
 
-_RESERVED_TABLES = ("length", "dircount", "exempt", "barrels", "nesting", "returns")
+_RESERVED_TABLES = (
+    "length",
+    "dircount",
+    "exempt",
+    "barrels",
+    "nesting",
+    "returns",
+    "named_results",
+)
 _TOP_LEVEL_SCALAR_KEYS = ("languages", "tests")
 _LANGUAGE_KEYS = ("include", "mover", "mover_command")
 _LENGTH_KEYS = ("cap", "cap_tests", "watch", "enabled")
@@ -28,6 +36,7 @@ _BARRELS_KEYS = (
 )
 _NESTING_KEYS = ("include", "max_depth", "exempt", "enabled")
 _RETURNS_KEYS = ("include", "exempt", "enabled")
+_NAMED_RESULTS_KEYS = ("include", "exclude", "enabled")
 
 
 @dataclass(frozen=True)
@@ -78,6 +87,13 @@ class ReturnsPolicy:
 
 
 @dataclass(frozen=True)
+class NamedResultsPolicy:
+    include: tuple[str, ...] = ("**/*.py",)
+    exclude: tuple[str, ...] = ()
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
 class Policy:
     languages: dict[str, LanguagePolicy]
     tests: tuple[str, ...]
@@ -88,6 +104,7 @@ class Policy:
     barrels: BarrelsPolicy = field(default_factory=BarrelsPolicy)
     nesting: NestingPolicy = field(default_factory=NestingPolicy)
     returns: ReturnsPolicy = field(default_factory=ReturnsPolicy)
+    named_results: NamedResultsPolicy = field(default_factory=NamedResultsPolicy)
 
 
 def default_policy() -> Policy:
@@ -141,6 +158,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     barrels = _build_barrels(raw.get("barrels"))
     nesting = _build_nesting(raw.get("nesting"))
     returns = _build_returns(raw.get("returns"))
+    named_results = _build_named_results(raw.get("named_results"))
 
     languages = {name: _build_language(name, raw.get(name)) for name in language_names}
 
@@ -164,6 +182,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         barrels=barrels,
         nesting=nesting,
         returns=returns,
+        named_results=named_results,
     )
 
 
@@ -288,6 +307,20 @@ def _build_returns(table: object) -> ReturnsPolicy:
     )
 
 
+def _build_named_results(table: object) -> NamedResultsPolicy:
+    if table is None:
+        return NamedResultsPolicy()
+    where = "[tool.filepawl.named_results]"
+    if not isinstance(table, dict):
+        raise ConfigError(f"{where} must be a table")
+    _check_keys(table, _NAMED_RESULTS_KEYS, where)
+    return NamedResultsPolicy(
+        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        exclude=_str_list(table.get("exclude", []), f"{where}.exclude"),
+        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+    )
+
+
 def _build_exempt(
     table: object, where: str = "[tool.filepawl.exempt]"
 ) -> dict[str, str]:
@@ -325,70 +358,3 @@ def _bool(value: object, where: str) -> bool:
     if not isinstance(value, bool):
         raise ConfigError(f"{where} must be a boolean")
     return value
-
-
-DEFAULT_POLICY_STUB = (
-    "\n# filepawl policy; uncomment to override defaults\n"
-    + "\n".join(
-        "# " + line
-        for line in [
-            "[tool.filepawl]",
-            'languages = ["python"]',
-            'tests = ["tests/**"]',
-            "",
-            "[tool.filepawl.length]",
-            "cap = 500",
-            "cap_tests = 800",
-            "watch = 400",
-            "",
-            "[tool.filepawl.dircount]",
-            "cap = 15",
-            "cap_tests = 30",
-            'exclude = ["__init__.py"]',
-            "",
-            "[tool.filepawl.exempt]",
-            "# path = reason. Human-edited. Exempts from the hard cap only; "
-            "the file still",
-            "# needs an allowance entry and may not grow.",
-            '# "scripts/junkcal_fixture.py" = "junkcal fixture oracle, '
-            'provenance kept whole"',
-            "",
-            "[tool.filepawl.barrels]",
-            'include = ["**/*.py"]',
-            'forwarders = ["**"]',
-            "",
-            "[tool.filepawl.barrels.module_exempt]",
-            "# path = reason. Human-edited. A module that defines nothing on purpose.",
-            "",
-            "[tool.filepawl.barrels.forwarder_exempt]",
-            '# "path::function" = reason. Human-edited. A forwarder that is the '
-            "right shape.",
-            "",
-            "[tool.filepawl.nesting]",
-            'include = ["**/*.py"]',
-            "max_depth = 4",
-            "",
-            "[tool.filepawl.nesting.exempt]",
-            '# "path::qualified.name" = reason. Human-edited. A function that '
-            "nests past the limit on purpose.",
-            "",
-            "[tool.filepawl.returns]",
-            'include = ["**/*.py"]',
-            "",
-            "[tool.filepawl.returns.exempt]",
-            '# "path::qualified.name" = reason. Human-edited. A function whose '
-            "dict returns differ on purpose.",
-            "",
-            "[tool.filepawl.python]",
-            'include = ["**/*.py"]',
-            'mover = "rope"',
-            "",
-            "[tool.filepawl.javascript]",
-            'include = ["**/*.js", "**/*.css"]',
-            'mover = "command"',
-            'mover_command = "npx jscodeshift -t scripts/move.js --old '
-            '{old} --new {new} src/"',
-        ]
-    )
-    + "\n"
-)
