@@ -9,6 +9,7 @@ import pytest
 from filepawl.config import (
     BarrelsPolicy,
     DircountPolicy,
+    HandlersPolicy,
     LanguagePolicy,
     LengthPolicy,
     NamedResultsPolicy,
@@ -188,6 +189,44 @@ class TestNamedResultsPolicy:
     def test_stub_carries_the_named_results_block(self) -> None:
         assert "# [tool.filepawl.named_results]" in DEFAULT_POLICY_STUB
         assert "# exclude = []" in DEFAULT_POLICY_STUB
+
+
+class TestHandlersPolicy:
+    def test_defaults(self) -> None:
+        assert default_policy().handlers == HandlersPolicy(
+            include=("**/*.py",), exempt={}, enabled=True
+        )
+
+    def test_table_is_read(self, tmp_path: Path) -> None:
+        write(
+            tmp_path,
+            "[tool.filepawl.handlers]\n"
+            'include = ["pkg/**/*.py"]\n'
+            "enabled = false\n"
+            "[tool.filepawl.handlers.exempt]\n"
+            '"pkg/a.py::main" = "the CLI boundary turns errors into exit codes"\n',
+        )
+        policy = load_policy(tmp_path)
+        assert policy.handlers == HandlersPolicy(
+            include=("pkg/**/*.py",),
+            exempt={"pkg/a.py::main": "the CLI boundary turns errors into exit codes"},
+            enabled=False,
+        )
+        assert "handlers" not in policy.gate_tables
+
+    def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
+        write(tmp_path, "[tool.filepawl.handlers]\nallow_none = true\n")
+        with pytest.raises(ConfigError, match="unknown key 'allow_none'"):
+            load_policy(tmp_path)
+
+    def test_exemption_reason_must_be_a_string(self, tmp_path: Path) -> None:
+        write(tmp_path, '[tool.filepawl.handlers.exempt]\n"a.py::f" = 1\n')
+        with pytest.raises(ConfigError, match="must be a string reason"):
+            load_policy(tmp_path)
+
+    def test_stub_carries_the_handlers_block(self) -> None:
+        assert "# [tool.filepawl.handlers]" in DEFAULT_POLICY_STUB
+        assert "# [tool.filepawl.handlers.exempt]" in DEFAULT_POLICY_STUB
 
 
 class TestDefaultPolicy:

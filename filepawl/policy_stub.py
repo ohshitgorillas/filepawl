@@ -58,6 +58,13 @@ DEFAULT_POLICY_STUB = (
             'include = ["**/*.py"]',
             "exclude = []",
             "",
+            "[tool.filepawl.handlers]",
+            'include = ["**/*.py"]',
+            "",
+            "[tool.filepawl.handlers.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A function that '
+            "returns from a handler on purpose.",
+            "",
             "[tool.filepawl.python]",
             'include = ["**/*.py"]',
             'mover = "rope"',

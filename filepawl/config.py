@@ -22,6 +22,7 @@ _RESERVED_TABLES = (
     "nesting",
     "returns",
     "named_results",
+    "handlers",
 )
 _TOP_LEVEL_SCALAR_KEYS = ("languages", "tests")
 _LANGUAGE_KEYS = ("include", "mover", "mover_command")
@@ -37,6 +38,7 @@ _BARRELS_KEYS = (
 _NESTING_KEYS = ("include", "max_depth", "exempt", "enabled")
 _RETURNS_KEYS = ("include", "exempt", "enabled")
 _NAMED_RESULTS_KEYS = ("include", "exclude", "enabled")
+_HANDLERS_KEYS = ("include", "exempt", "enabled")
 
 
 @dataclass(frozen=True)
@@ -94,6 +96,13 @@ class NamedResultsPolicy:
 
 
 @dataclass(frozen=True)
+class HandlersPolicy:
+    include: tuple[str, ...] = ("**/*.py",)
+    exempt: dict[str, str] = field(default_factory=dict)
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
 class Policy:
     languages: dict[str, LanguagePolicy]
     tests: tuple[str, ...]
@@ -105,6 +114,7 @@ class Policy:
     nesting: NestingPolicy = field(default_factory=NestingPolicy)
     returns: ReturnsPolicy = field(default_factory=ReturnsPolicy)
     named_results: NamedResultsPolicy = field(default_factory=NamedResultsPolicy)
+    handlers: HandlersPolicy = field(default_factory=HandlersPolicy)
 
 
 def default_policy() -> Policy:
@@ -159,6 +169,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     nesting = _build_nesting(raw.get("nesting"))
     returns = _build_returns(raw.get("returns"))
     named_results = _build_named_results(raw.get("named_results"))
+    handlers = _build_handlers(raw.get("handlers"))
 
     languages = {name: _build_language(name, raw.get(name)) for name in language_names}
 
@@ -183,6 +194,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         nesting=nesting,
         returns=returns,
         named_results=named_results,
+        handlers=handlers,
     )
 
 
@@ -317,6 +329,20 @@ def _build_named_results(table: object) -> NamedResultsPolicy:
     return NamedResultsPolicy(
         include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
         exclude=_str_list(table.get("exclude", []), f"{where}.exclude"),
+        enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
+    )
+
+
+def _build_handlers(table: object) -> HandlersPolicy:
+    if table is None:
+        return HandlersPolicy()
+    where = "[tool.filepawl.handlers]"
+    if not isinstance(table, dict):
+        raise ConfigError(f"{where} must be a table")
+    _check_keys(table, _HANDLERS_KEYS, where)
+    return HandlersPolicy(
+        include=_str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        exempt=_build_exempt(table.get("exempt"), "[tool.filepawl.handlers.exempt]"),
         enabled=_bool(table.get("enabled", True), f"{where}.enabled"),
     )
 

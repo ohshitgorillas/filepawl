@@ -97,6 +97,22 @@ def test_named_results_disabled_via_policy_named_results_enabled(
     assert registry.discover_gates(policy) == []
 
 
+def test_handlers_disabled_via_policy_handlers_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_module(monkeypatch, "fake_handlers_mod", "FakeHandlers", "handlers")
+    monkeypatch.setattr(
+        registry,
+        "_BUILTIN_GATES",
+        (("handlers", "fake_handlers_mod", "FakeHandlers"),),
+    )
+    monkeypatch.setattr(registry, "entry_points", lambda group: [])
+    handlers = dataclasses.replace(default_policy().handlers, enabled=False)
+    policy = dataclasses.replace(default_policy(), handlers=handlers)
+
+    assert registry.discover_gates(policy) == []
+
+
 class _FakeEntryPoint:
     def __init__(self, name: str, loader: object) -> None:
         self.name = name
