@@ -33,6 +33,7 @@ filepawl check [PATH...]
 filepawl accept [PATH...] [--reason TEXT]
 filepawl init
 filepawl mv OLD NEW
+filepawl hook
 ```
 
 ### `filepawl init`
@@ -59,7 +60,7 @@ big.py: over watch line 400 (450 lines); run `filepawl accept big.py`
 filepawl accept big.py
 ```
 
-A `PATH...` argument narrows the length gate's measured set; the stale allowance audit and the directory gate always run over the whole tree, because a directory's file count is meaningless measured over a subset.
+`PATH...` narrows the length gate to those files. Every other check covers the whole tree.
 
 Exit codes: `0` clean, `1` one or more findings, `2` a configuration or state error (unparseable TOML, unknown key, unknown mover, missing `git`).
 
@@ -96,7 +97,11 @@ Exits 0 whenever the move itself ran, even with leftover references — they are
 
 ### `filepawl hook`
 
-Reads one Claude Code `PreToolUse` payload on stdin and, for a `Write`, `Edit` or `MultiEdit`, works out how long the file will be after the edit. When that length is over the watch line, or over a cap, it prints hook JSON whose `additionalContext` tells the agent where the file stands: its allowance, how far this edit takes it past that allowance, and that the split can be planned now and delegated. Under the watch line it prints nothing. An edit that grows a file to over its cap (`cap_tests` for a test) is denied instead, unless the path is exempt: the cap fails `filepawl check` anyway, and denying the edit moves that failure to the moment it happens. An edit that leaves an already over-cap file no longer than it was goes through with a notice, so such a file can be split a piece at a time. The command always exits 0.
+Checks an agent's edit before it lands. The Claude Code plugin runs it on every `Write`, `Edit` and `MultiEdit`, and it judges the file's length after the edit:
+
+- Under the watch line: it says nothing.
+- Over the watch line or a cap: it tells the agent where the file stands, and that the split can be planned now and delegated.
+- Grows a file over its cap: it blocks the edit, unless the file is exempt. An edit that leaves an over-cap file no longer than it was goes through with a notice, so the file can be split a piece at a time.
 
 ```
 filepawl: pkg/big.py: in the length ratchet at 450 lines; this edit takes it 450 → 458. 8 lines over the allowance; split them out before committing. Plan the split now; it is mechanical and can be delegated.
