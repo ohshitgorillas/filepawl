@@ -41,7 +41,9 @@ def _read(node: ast.expr) -> ast.expr | None:
     try:
         return ast.parse(node.value, mode="eval").body
     except (SyntaxError, ValueError):
-        return None
+        # A string that does not parse names no type, so there is nothing to read.
+        pass
+    return None
 
 
 def _items(node: ast.Subscript) -> list[ast.expr]:

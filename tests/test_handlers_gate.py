@@ -1,4 +1,4 @@
-"""Tests for filepawl.gates.handlers: the handlers gate (design.md §6.9)."""
+"""Tests for filepawl.gates.handlers: the handlers gate (design.md §6.10)."""
 
 from __future__ import annotations
 

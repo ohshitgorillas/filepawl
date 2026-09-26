@@ -1,4 +1,4 @@
-"""Handlers gate: no sentinel returns from exception handlers (design.md §6.9).
+"""Handlers gate: no sentinel returns from exception handlers (design.md §6.10).
 
 A `return` inside an `except` turns the exception into a value the caller
 must know to test for, and drops the exception's type and traceback.
