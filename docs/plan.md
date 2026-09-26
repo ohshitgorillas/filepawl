@@ -172,6 +172,14 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`feat: handlers gate fails values assigned in handlers`**: a name assigned in a handler and read by a value return fails as a handler return does, in `filepawl/gates/handlers.py` and §2, §6.10 and §9, tested in `tests/test_handlers_gate.py`, with `README.md` and the `[Unreleased]` section of `CHANGELOG.md` to match.
 - **`chore: release 0.7.0`**: the `[Unreleased]` section of `CHANGELOG.md` becomes 0.7.0, and `pyproject.toml` and `plugin.json` carry 0.7.0.
 
+### Absence gate (spec §6.11)
+
+- **`docs: absence gate spec`**: `docs/design.md` §1, §2, §3, §4, §6.3, §6.11, §9, §10; `docs/plan.md`.
+- **`feat: absence policy`**: `AbsencePolicy` in `filepawl/config.py` (`enabled`, `include`, `exempt`), `absence` reserved, registry `_is_enabled` branch, `filepawl/policy_stub.py`; tests in `tests/test_config.py` and `tests/test_gate_registry.py`.
+- **`test: give every absence-only test its contrast`**: each test in `tests/` that §6.11 fails is rewritten to assert its absence beside a case where the feature acts, keeping the behavior it names; no exemption is added.
+- **`feat: absence gate`**: `filepawl/gates/absence.py`, last entry of `_BUILTIN_GATES`; tests in `tests/test_absence_gate.py`; `filepawl check` stays green on this tree.
+- **`docs: absence in README and changelog`**: `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
+
 ## Verification (orchestrator, end)
 
 ```
