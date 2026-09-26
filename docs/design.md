@@ -323,7 +323,7 @@ There is no exemption table. Parsed JSON gets no exception: code that passes JSO
 No named-results finding is fixable by `accept`, and `accept` leaves state unchanged.
 ### 6.10 Handlers gate
 
-A `return` inside an exception handler turns the exception into a value. The caller receives `None`, `False` or an empty result where an error was, and must know to test for it. The exception's type and traceback are gone, and a caller that does not test carries the sentinel on as data. The fix is to let the exception propagate, to raise a narrower one, or to handle it so that the function goes on to its normal return.
+A `return` inside an exception handler turns the exception into a value. The caller receives `None`, `False` or an empty result where an error was, and must know to test for it. The exception's type and traceback are gone, and a caller that does not test carries the sentinel on as data. The fix is to let the exception propagate, to raise a narrower one, or to handle it completely, so that nothing the function returns stands for the failure. Moving the `return` out of the handler while still handing back the sentinel passes the gate and fixes nothing.
 
 Checked files: tree files matched by `[tool.filepawl.handlers] include`, minus test paths, since test helpers catch and return on purpose. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6.
 
