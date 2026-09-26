@@ -166,6 +166,11 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`feat: handlers gate`**: `filepawl/gates/handlers.py`, last entry of `_BUILTIN_GATES`; tests in `tests/test_handlers_gate.py`.
 - **`docs: handlers in README and changelog`**: `README.md`, `CHANGELOG.md`, version 0.6.0 in `pyproject.toml` and `plugin.json`.
 
+### Handlers follow-up (spec §6.10)
+
+- **`fix: name every fix in the handlers finding`**: the finding text names propagating, raising a narrower exception and handling completely, in `filepawl/gates/handlers.py` and §6.10, tested in `tests/test_handlers_gate.py`.
+- **`feat: handlers gate fails values assigned in handlers`**: a name assigned in a handler and read by a value return fails as a handler return does, in `filepawl/gates/handlers.py` and §2, §6.10 and §9, tested in `tests/test_handlers_gate.py`, with `README.md`, `CHANGELOG.md` and the version in `pyproject.toml` and `plugin.json` to match.
+
 ## Verification (orchestrator, end)
 
 ```

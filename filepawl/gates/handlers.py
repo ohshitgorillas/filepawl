@@ -104,7 +104,8 @@ class HandlersGate:
                 spelled = ", ".join(str(line) for line in lines)
                 message = (
                     f"returns from an except handler at {where} {spelled}"
-                    " — raise instead of returning a sentinel"
+                    " — let it propagate, raise a narrower one, or handle it"
+                    " so nothing returned stands for the failure"
                 )
                 findings.append(Finding(f"{path}::{func}", message))
         findings += self._stale(measured, policy)

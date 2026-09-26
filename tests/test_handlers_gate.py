@@ -23,7 +23,8 @@ def _lines(*lines: int) -> str:
     where = "line" if len(lines) == 1 else "lines"
     spelled = ", ".join(str(line) for line in lines)
     return f"returns from an except handler at {where} {spelled}" + (
-        " — raise instead of returning a sentinel"
+        " — let it propagate, raise a narrower one, or handle it"
+        " so nothing returned stands for the failure"
     )
 
 

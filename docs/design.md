@@ -331,7 +331,7 @@ A handler return is a `return` statement anywhere in the body of an `except` or 
 
 Returns belong to the innermost function that contains them, as in §6.8. A nested `def` inside a handler is judged on its own: its returns are not the outer function's handler returns, and its value returns do not count toward the outer function. A `lambda` has no `return` statement and is judged on its own, so a `lambda` does not give the outer function a value return. Functions are named by qualified name as in §6.7.
 
-A function fails when it has a handler return that is a value return, or a bare handler return while it also has a value return anywhere outside its nested functions. Finding: `path::qualified.name: returns from an except handler at line N — raise instead of returning a sentinel`, with `lines N, M` listing every failing handler return in source order when there is more than one.
+A function fails when it has a handler return that is a value return, or a bare handler return while it also has a value return anywhere outside its nested functions. Finding: `path::qualified.name: returns from an except handler at line N — let it propagate, raise a narrower one, or handle it so nothing returned stands for the failure`, with `lines N, M` listing every failing handler return in source order when there is more than one.
 
 Exemptions live in `[tool.filepawl.handlers.exempt]`, keyed `path::qualified.name`, with a reason. An entry covers every function its key names. The audit covers every entry on every run and reports each finding under path `pyproject.toml`:
 
