@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **The absence gate fails tests that assert only an absent value.** A test whose every `assert` compares against `None`, `False`, `0`, `""`, an empty list or dict, a tuple of such values or an empty constructor, or is `not <expr>`, and which asserts nothing else, fails: code that never ran the feature passes it too. Only test paths are checked.
+- **The absence gate reads `[tool.filepawl.absence]` in `pyproject.toml`.** `include` narrows which test files it checks, `exempt` excuses one test keyed `path::qualified.name` with a reason, and `enabled = false` turns the gate off. An exemption naming a missing file, a missing test or a test that asserts a present value is reported as a finding.
+- **The `filepawl init` stub gains the absence block.**
+
 ## 0.7.0 - 2026-09-26
 
 ### Changed

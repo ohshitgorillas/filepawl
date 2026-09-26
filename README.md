@@ -1,6 +1,6 @@
 # filepawl
 
-Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting, return-shape, named-results and exception-handler gates, packaged as one installable CLI.
+Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting, return-shape, named-results, exception-handler and absence gates, packaged as one installable CLI.
 
 The idea: a file under a "watch" line is unrestricted. Once it crosses that line it needs an allowance entry recording its length, and the allowance can only be lowered or dropped, never raised — so a file that grows past its recorded length fails until it is split, and one that shrinks must have its entry brought down to match. A hard cap still blocks any file, watched or not, from growing without bound. A second, stateless gate caps how many files sit directly in one directory.
 
@@ -174,6 +174,12 @@ include = ["**/*.py"]
 [tool.filepawl.handlers.exempt]
 # "path::qualified.name" = reason. A function that returns from a handler on purpose.
 
+[tool.filepawl.absence]
+include = ["**/*.py"]
+
+[tool.filepawl.absence.exempt]
+# "path::qualified.name" = reason. A test that asserts only an absent value on purpose.
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -209,6 +215,7 @@ The hook runs `filepawl check` over the whole tree on every commit (`pass_filena
 - **Returns gate**: refuses a function whose dict-literal returns carry different key sets, such as `{"ok": True, "data": d}` on one path and `{"ok": False}` on another. Only literals whose every key is a string constant count; a `**` spread or computed key is skipped, and a return that is not a dict literal is ignored. Test paths are skipped. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
 - **Named-results gate**: refuses a return annotation or module-level alias that names `dict`, `Dict`, `Mapping` or `MutableMapping` with an `Any` or `object` value type, or one of those names on its own, such as `-> dict[str, Any]` or `Wire = dict[str, Any]`. It reads the whole annotation: inside `|`, `Optional`, `list`, `tuple`, `Callable` and quoted forms, and a value type such as `Any | None`. Test paths are skipped, and `exclude` globs take paths out of scope. There are no exemptions; parsed JSON is typed with a recursive alias such as `JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]`.
 - **Handlers gate**: refuses a function that returns a value from an `except` or `except*` handler, `return None` included, because the caller gets a sentinel where an exception was. A bare `return` in a handler fails only when the function returns a value elsewhere. A name assigned in a handler fails when a value return reads it, so `except E: result = {}` followed by `return result` fails like `return {}`. A nested `def` or `lambda` is judged on its own. Test paths are skipped. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
+- **Absence gate**: refuses a test whose every `assert` claims only that something is absent — `== []`, `== ""`, `is None`, `== 0`, `not x`, a tuple of such values — and which asserts nothing else, because code that never ran the feature passes it too. Assert the absence beside a case where the feature acts, as in `assert (run(clean), run(dirty)) == ([], [finding])`, or add a present-value assertion on the same surface. A `pytest.raises`, `pytest.warns` or `pytest.deprecated_call` block, or an `assert*` method call such as `mock.assert_called_once_with`, counts as asserting something else; a test with no `assert` is left alone. Each test is judged on its own, so a passing sibling does not excuse it. Only test paths are checked. Exemptions are per test, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
 
 The gates, and the mover backends, are registries: a `[tool.filepawl.<gate>]` table with `enabled = false` turns a built-in gate off, and third parties can add their own gate or mover under the `filepawl.gates` / `filepawl.movers` entry-point groups.
 
