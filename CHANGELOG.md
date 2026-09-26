@@ -4,17 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.6.0 - 2026-09-26
+## [Unreleased]
 
 ### Added
 
 - **The handlers gate fails functions that return from an exception handler.** A `return` with a value inside `except` or `except*` fails, `return None` included, and so does a bare `return` there when the function returns a value elsewhere.
 - **The handlers gate takes a `[tool.filepawl.handlers]` policy.** `include`, `exempt`, `enabled`. An exemption that excuses nothing fails.
 - **The `filepawl init` stub gains the handlers block.**
-
-### Changed
-
-- **`filepawl.cli.main` raises `SystemExit(2)` on a filepawl error instead of returning 2.** The exit status of the `filepawl` command is unchanged.
 
 ## 0.5.0 - 2026-09-26
 
