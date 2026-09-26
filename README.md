@@ -76,7 +76,7 @@ $ filepawl accept src/module.py --reason "parser plus its own tests fixture"
 
 ### `filepawl mv OLD NEW`
 
-Moves a file (or, for Python, a module) and rewrites the imports that reference it, using whichever mover backend the matching `[tool.filepawl.<language>]` block names — `rope` for Python, a `command` template rendered with `{old}`/`{new}` and run through the shell, or plain `git mv` when no mover is configured. Afterwards it greps the tree for the old dotted module path and the old relative path as a literal string (catching `importlib`, `mock.patch("pkg.mod.fn")`, entry points and `pyproject.toml` references), prints any hits with `path:line: text` without editing them, and moves the file's allowance entry to the new path if it had one.
+Moves a file (or, for Python, a module) and rewrites the imports that reference it, using whichever mover backend the matching `[tool.filepawl.<language>]` block names — `rope` for Python, a `command` template rendered with `{old}`/`{new}` and run through the shell, or plain `git mv` when no mover is configured. The `rope` mover moves a module into another package under the same name; a move that renames the file exits 2. Afterwards it greps the tree for the old dotted module path and the old relative path as a literal string (catching `importlib`, `mock.patch("pkg.mod.fn")`, entry points and `pyproject.toml` references), prints any hits with `path:line: text` without editing them, and moves the file's allowance entry to the new path if it had one.
 
 ```
 $ filepawl mv src/old_name.py src/pkg/new_name.py
