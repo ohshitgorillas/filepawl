@@ -195,6 +195,16 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`feat: clocks policy`**: `ClocksPolicy` in `filepawl/config_suite.py` (`enabled`, `include`, `exempt`, `names`), registry and stub; the site engine hands each gate the policy; tests in `tests/suite/test_config_suite.py` and `tests/test_gate_registry.py`.
 - **`feat: clocks gate`**: `filepawl/gates/suite/clocks.py`, last entry of `_BUILTIN_GATES`; tests in `tests/suite/test_clocks_gate.py`, the ported cases citing their source; `filepawl check` green on this tree.
 
+### Commit judge (spec §7.2)
+
+- **`docs: judge spec`**: `docs/design.md` §1, §2, §3, §4, §7, §7.2, §9, §11; `docs/plan.md`.
+- **`feat: judge policy`**: `JudgePolicy` in `filepawl/config.py` (`enabled`, `model`, `batch`, `timeout`, `exempt`), `judge` reserved as a table name, `filepawl/policy_stub.py`; tests in `tests/test_config.py`.
+- **`feat: judge cases`**: `filepawl/judge/cases.py`; tests in `tests/test_judge_cases.py`.
+- **`feat: judge transport`**: `filepawl/judge/prompt.py` and `filepawl/judge/transport.py`; tests in `tests/test_judge_transport.py` against a fake `claude`.
+- **`feat: judge command`**: `filepawl/judge/command.py`, the `judge` subcommand in `filepawl/cli.py`, `filepawl-judge` in `.pre-commit-hooks.yaml`; tests in `tests/test_judge_command.py`.
+- **`chore: judge this repository's commits`**: `enabled = true` under `[tool.filepawl.judge]` in `pyproject.toml`, and `filepawl-judge` in `.pre-commit-config.yaml`.
+- **`docs: judge in README and changelog`**: `README.md`, including what a run costs, and the `[Unreleased]` section of `CHANGELOG.md`.
+
 ## Verification (orchestrator, end)
 
 ```

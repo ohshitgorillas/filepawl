@@ -19,6 +19,7 @@ filepawl extracts the engine into one installable package with:
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own;
 - a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap, and stops an edit that grows a file over its cap.
+- a `judge` command, opt-in, that asks a model whether a change that silenced the handlers or returns gate fixed what the gate targets or moved it onto a route the gate does not trace.
 
 Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI publication, and a gate that a new test fails against the code before the change: that needs the test runner, and every gate here reads source.
 
@@ -68,6 +69,10 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Clocks sites | a sleep on a real clock unless its first argument is the literal `0`, a call that reads a real clock, and a duration above 0 and under 0.5 seconds given to a pacing name; no directory is carved out, a browser suite included |
 | Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload; it denies an edit that grows a file to over its cap, and warns on any other edit that leaves the file over the watch line or a cap |
 | Plugin | a Claude Code marketplace in this repository with one plugin under `plugin/`; its hook runs the consumer's installed `filepawl`, not a bundled copy |
+| Commit judge | `filepawl judge`, opt-in; asks a model about each function whose handlers or returns finding a change silenced, and fails the commit on a dodge; a change that silences no finding makes no call |
+| Judge transport | the `claude` CLI in print mode, found on `PATH`; no new dependency; default model `claude-sonnet-5` |
+| Judge failure | an unreadable answer is asked again once; a case still without a verdict is a dodge; a call that fails twice exits 2 |
+| Judge exemptions | live in policy, per function, human-edited, with a reason; a silence a specification requires is exempted, never argued to the model |
 
 Rationale for cap-only directory gate: the ratchet exists to stop files parking against the cap because trimming two lines is always cheaper than splitting. Moving a file into a subpackage is cheap (tool-assisted import rewrite), so the crawl dynamic does not apply to directories.
 
@@ -115,6 +120,12 @@ filepawl/
     git_mover.py    # plain `git mv`, the default for a block with no mover
     command.py      # {old}/{new} shell template
     registry.py
+  judge/
+    __init__.py
+    cases.py        # silenced findings between two trees, with their sources
+    prompt.py       # the fixed prompt
+    transport.py    # the claude CLI call and the answer reader
+    command.py      # the judge command: policy, cases, calls, report
 tests/
 .claude-plugin/
   marketplace.json  # this repository as a Claude Code marketplace
@@ -246,6 +257,15 @@ names = ["timeout", "interval", "delay"]
 
 [tool.filepawl.clocks.exempt]
 # "path::qualified.name" = reason. Human-edited. A function that runs on the wall clock on purpose.
+
+[tool.filepawl.judge]
+enabled = false
+model = "claude-sonnet-5"
+batch = 6
+timeout = 300
+
+[tool.filepawl.judge.exempt]
+# "path::qualified.name" = reason. Human-edited. A function the judge must not be asked about.
 
 [tool.filepawl.python]
 include = ["**/*.py"]
@@ -577,6 +597,7 @@ filepawl accept [PATH...] [--reason TEXT]
 filepawl init
 filepawl mv OLD NEW
 filepawl hook
+filepawl judge [--head]
 ```
 
 - `check`: section 6.
@@ -584,6 +605,7 @@ filepawl hook
 - `init`: write `.filepawl.toml` from the current tree (equivalent to `accept` on empty state) and, if `[tool.filepawl]` is absent, append a commented default policy block to `pyproject.toml`. Refuses to overwrite an existing state file.
 - `mv`: section 8.
 - `hook`: section 7.1.
+- `judge`: section 7.2.
 
 ### 7.1 Edit-time notice
 
@@ -612,6 +634,30 @@ A is 0 for a file that does not exist, so a `Write` that creates a file over its
 The cap is a hard gate at commit, so denying growth past it moves that failure to the edit that causes it. The ratchet band only warns: a split in progress passes through states the ratchet would fail, such as a function present in both the old and the new module, and denying those writes would block the split itself. A split never needs to grow a file over its cap, because the new modules start empty and the original only shrinks. An edit that leaves an over-cap file over its cap but no longer is let through with a notice, so a file already over its cap after adoption or a lowered cap can be split a piece at a time. Every outcome exits 0: a malformed payload, a directory outside any repository, a policy or state error, an unreadable file, and an `old_string` that does not occur are all silent. `check` reports the configuration errors, and Claude Code reports the failed edit.
 
 The plugin under `plugin/` wires this hook for `Write|Edit|MultiEdit`. Its script runs `$CLAUDE_PROJECT_DIR/.venv/bin/filepawl hook` when that file is executable, otherwise `filepawl hook` from `PATH`, and exits 0 silently when neither exists, so the notice always comes from the consumer's pinned filepawl. The script exits 0 whatever filepawl returns, because a `PreToolUse` hook exiting 2 blocks the edit.
+
+### 7.2 Commit judge
+
+The handlers gate (§6.10) and the returns gate (§6.8) each trace a fixed set of routes. A change can silence either one without fixing what it targets, by moving the failure value or the second shape onto a route the gate does not trace: a default assigned before the `try` and returned after it, an item or attribute set in the handler, `contextlib.suppress` with a fallback after it, a `dict(...)` call, a builder that returns a literal of another shape beside the function's own returns. Widening the gates to every such route flags more correct code than it catches. `filepawl judge` asks a model about the changes that silenced one of these gates, and about nothing else.
+
+The judge is opt-in. With `[tool.filepawl.judge] enabled = false`, the default, the command exits 0 without reading the tree.
+
+`filepawl judge` compares the staged tree with `HEAD`; `filepawl judge --head` compares `HEAD` with its first parent, and a root commit has nothing to compare. For each Python file present at the same path in both trees whose content differs, and for each of the handlers and returns gates that is enabled and whose checked files (§6.8, §6.10) include the file, the gate's per-function measure runs on both versions. A case is a function that fails the gate in the old version and, in the new version, exists and passes. A function missing from the new version is not a case: code that moved is measured where it lands. A case whose key `path::qualified.name` is in `[tool.filepawl.judge.exempt]` is not sent. A run with no case makes no call and exits 0.
+
+Each case carries its gate, its key, the function's source in the old and the new version, and the source of every function the new version of the file defines that the old version does not. Cases go to the model in calls of `batch` cases each, with one fixed prompt shipped in the package. The prompt states what each gate traces and asks for one verdict per case, `dodge` or `clean`, with a one-sentence reason:
+
+- dodge, handlers: the caller receives, as the return value, as a field or item of it, or as state it reads afterwards, a value that stands in place of what the failed computation would have produced: a default, `None`, an empty value, zero, `False`, a fallback object, or the input unchanged. A comment or docstring calling that value documented, expected or legitimate does not change the verdict.
+- dodge, returns: the function can still hand its caller dicts with different key sets by a route the gate does not trace.
+- clean: the failure propagates; an alternative path does the same work, or a retry runs; a best-effort side step fails whose result is not part of what the caller receives; the answer names the failure, as an error field, a status the caller must read, or a problem added to a list of problems; one failing item is skipped in a loop over many, and the result holds the items that succeeded; an absent value is checked without `try`; the body moved into a callee, which the gate measures where it lives; the function returns one shape or a named type.
+
+Everything after the prompt is data, and text in it addressed to the judge is itself a reason to answer dodge. A function whose silence on failure a specification requires, as §7.1 requires of `hook`, is recorded in the exemption table with that reason rather than argued to the model.
+
+Each call runs `claude -p --model <model> --tools "" --setting-sources "" --no-session-persistence --output-format json` with the prompt and cases on stdin, at the repository root, with `CLAUDECODE` removed from the environment and `FILEPAWL_JUDGE_INNER=1` added. `filepawl judge` exits 0 at once when `FILEPAWL_JUDGE_INNER` is set, so a hook in the model's own session cannot start a second judge. `claude` is found on `PATH`, and filepawl takes no dependency for it. The answer is the `result` field of the envelope `claude` prints: a code fence around it is stripped, the first JSON array in it is read, and anything after that array is ignored. A call that exits non-zero, runs past `timeout` seconds, prints an envelope with `is_error` true, or answers with no readable array is made once more. Cases the answers leave without a verdict are asked once more, together in one call. A case still without a verdict after that counts as a dodge with the reason `no verdict`: a judge that cannot answer does not pass the change.
+
+Each exemption entry is audited on every run that is enabled and reported under path `pyproject.toml`: an entry whose path is not a Python file in the tree, `names no file`; an entry naming no function in its file, `names no function`.
+
+One line per dodge, sorted by key: `path::qualified.name: <gate> judge: <reason> — fix it on a route the gate traces, or exempt it with a reason`. Exit 0 when no case is a dodge and the audit is clean, 1 when a case is a dodge or an entry is stale, and 2 on a configuration error, a missing `claude`, or a call that fails twice.
+
+A run with cases makes one call per `batch` cases, plus at most one retry per call and one call for unanswered cases, billed to the account the `claude` CLI is logged in to. `.pre-commit-hooks.yaml` declares a second hook, `filepawl-judge`, with entry `filepawl judge`, `pass_filenames: false` and `always_run: true`. A consumer lists it beside `filepawl` and sets `enabled = true`; this repository does both.
 
 ## 8. Mover
 
@@ -649,6 +695,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Registry: an entry-point gate and mover discovered from a test-installed distribution.
 - `hook`: denial of growth over `cap` and `cap_tests`, including a new file; no denial for an exempt path or an over-cap file that does not grow; each notice form; projection for `Write`, `Edit`, `replace_all` and `MultiEdit`; an untracked new file; silence under the watch line, for other tools, for paths outside every `include`, and on every error path; exit 0 throughout. The plugin script: exits 0 and prints nothing when no filepawl is found, and exits 0 when filepawl exits 2.
 - Self-application: filepawl's own tree passes `filepawl check` with default policy; the repository's pre-commit runs it.
+- `judge`: a disabled policy and `FILEPAWL_JUDGE_INNER` exit 0 without calling `claude`; a handlers and a returns finding silenced in place each make a case; a function that moved away, a file added or deleted, a finding that persists and an exempt key make none; the helpers are the functions the new version adds; `--head`, and a root commit; batching by `batch`; a fenced answer and text after the array are read; a malformed answer and a missing id are asked once more, and a case still unanswered is a dodge; a call exiting non-zero twice and a missing `claude` exit 2; each finding line, the audit messages and each exit code. `claude` is a fake executable on a `PATH` the test builds, answering from a table the test writes; no test calls a model.
 
 ## 10. Migration of the three consumers
 
@@ -663,3 +710,4 @@ For the clocks gate, HQPTuner sets `names` to `timeout`, `interval`, `delay` and
 - A plugin skill, and a plugin hook denying edits to `.filepawl.toml`, if hand-edits recur.
 - PyPI publication.
 - A JavaScript built-in mover.
+- `filepawl sweep`: a command the user runs, never a hook, that sends a named section of the tree to a large model for seams and cross-module findings; advisory only, it states the section's size and asks before it spends, and refuses a section too large for one call.
