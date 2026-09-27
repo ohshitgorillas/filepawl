@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from filepawl.config import BarrelsPolicy, Policy, default_policy
+from filepawl.config import Policy, default_policy
+from filepawl.config_code import BarrelsPolicy
 from filepawl.gates.barrels import BarrelsGate
 from filepawl.gates.base import Finding
 from filepawl.state import State

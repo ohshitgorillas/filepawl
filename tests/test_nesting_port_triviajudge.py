@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from filepawl.config import NestingPolicy, Policy, default_policy
+from filepawl.config import Policy, default_policy
+from filepawl.config_code import NestingPolicy
 from filepawl.gates.base import Finding
 from filepawl.gates.nesting import NestingGate
 from filepawl.state import State

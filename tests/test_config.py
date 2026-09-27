@@ -7,18 +7,20 @@ from pathlib import Path
 import pytest
 
 from filepawl.config import (
-    BarrelsPolicy,
     DircountPolicy,
-    HandlersPolicy,
     JudgePolicy,
     LanguagePolicy,
     LengthPolicy,
-    NamedResultsPolicy,
-    NestingPolicy,
     Policy,
-    ReturnsPolicy,
     default_policy,
     load_policy,
+)
+from filepawl.config_code import (
+    BarrelsPolicy,
+    HandlersPolicy,
+    NamedResultsPolicy,
+    NestingPolicy,
+    ReturnsPolicy,
 )
 from filepawl.errors import ConfigError
 from filepawl.policy_stub import DEFAULT_POLICY_STUB

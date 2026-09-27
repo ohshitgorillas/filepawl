@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from filepawl.config import NamedResultsPolicy, Policy, default_policy
+from filepawl.config import Policy, default_policy
+from filepawl.config_code import NamedResultsPolicy
 from filepawl.gates.base import Finding
 from filepawl.gates.named_results import NamedResultsGate
 from filepawl.state import State

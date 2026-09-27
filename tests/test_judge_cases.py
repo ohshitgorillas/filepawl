@@ -7,13 +7,8 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
-from filepawl.config import (
-    HandlersPolicy,
-    JudgePolicy,
-    Policy,
-    ReturnsPolicy,
-    default_policy,
-)
+from filepawl.config import JudgePolicy, Policy, default_policy
+from filepawl.config_code import HandlersPolicy, ReturnsPolicy
 from filepawl.judge.cases import Case, find_cases
 
 Repo = Callable[[dict[str, str | int]], Path]

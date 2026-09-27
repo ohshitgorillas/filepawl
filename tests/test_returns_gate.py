@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from filepawl.config import Policy, ReturnsPolicy, default_policy
+from filepawl.config import Policy, default_policy
+from filepawl.config_code import ReturnsPolicy
 from filepawl.gates.base import Finding
 from filepawl.gates.returns import ReturnsGate, failing_names
 from filepawl.state import State
