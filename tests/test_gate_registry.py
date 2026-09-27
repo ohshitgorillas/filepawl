@@ -23,6 +23,7 @@ BUILTINS = [
     "handlers",
     "absence",
     "private",
+    "mocks",
 ]
 
 
