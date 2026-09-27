@@ -15,7 +15,7 @@ filepawl extracts the engine into one installable package with:
 - a sixth gate against functions that return a mapping without naming its shape;
 - a seventh gate against functions that return from an exception handler;
 - an eighth gate against tests that assert only an absent value;
-- seven test-suite gates against tests that reach private names, patch or mock the repository's own code, read the host environment, compare against a golden dump, carry a name that states no behavior, or assert only that something exists, and against fakes that compute their replies with the repository's own code;
+- eight test-suite gates against tests that reach private names, patch or mock the repository's own code, read the host environment, compare against a golden dump, carry a name that states no behavior, assert only that something exists, or run on the wall clock, and against fakes that compute their replies with the repository's own code;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own;
 - a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap, and stops an edit that grows a file over its cap.
@@ -60,11 +60,12 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Absence pairing | none; a test carries its own contrast, and a sibling test asserting a present value does not excuse it |
 | Absence exemptions | live in policy, per test, human-edited, with a reason; no command writes them, and a stale one fails |
 | Own code | `[tool.filepawl] packages` names the repository's top-level import names; absent, they are derived from the tree's non-test Python files |
-| Test-suite gates | built-in, enabled by default, Python only (`ast`): private, mocks, environment, snapshots, test names, existence, fakes; each reads test paths only, whole tree every run |
-| Test-suite site gates | private, mocks, environment, snapshots and fakes report each offending site under its innermost function, and exempt per function, human-edited, with a reason; no command writes them, and a stale one fails |
+| Test-suite gates | built-in, enabled by default, Python only (`ast`): private, mocks, environment, snapshots, test names, existence, fakes, clocks; each reads test paths only, whole tree every run |
+| Test-suite site gates | private, mocks, environment, snapshots, fakes and clocks report each offending site under its innermost function, and exempt per function, human-edited, with a reason; no command writes them, and a stale one fails |
 | Test-suite test gates | test names and existence judge each test as §6.11 does, and exempt per test, human-edited, with a reason; no command writes them, and a stale one fails |
 | Mocks targets | none; every patch fails whatever it replaces, own code or third-party; setting process state through `chdir`, `setenv`, `delenv`, `syspath_prepend` and `sys.modules` or `os.environ` items is not a patch |
-| Test-suite heuristics | snapshots fails a literal over `max_items` leaves, default 8; test names fails under `min_words` words, default 3; both are policy |
+| Test-suite heuristics | snapshots fails a literal over `max_items` leaves, default 8; test names fails under `min_words` words, default 3; clocks reads a duration under the `names` it lists, default `timeout`, `interval` and `delay`; all three are policy |
+| Clocks sites | a sleep on a real clock unless its first argument is the literal `0`, a call that reads a real clock, and a duration above 0 and under 0.5 seconds given to a pacing name; no directory is carved out, a browser suite included |
 | Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload; it denies an edit that grows a file to over its cap, and warns on any other edit that leaves the file over the watch line or a cap |
 | Plugin | a Claude Code marketplace in this repository with one plugin under `plugin/`; its hook runs the consumer's installed `filepawl`, not a bundled copy |
 
@@ -106,6 +107,7 @@ filepawl/
       naming.py     # test names that state no behavior
       existence.py  # tests that assert only that something exists
       fakes.py      # fakes that compute replies with own code
+      clocks.py     # tests that run on the wall clock
   movers/
     __init__.py
     base.py         # Mover protocol, shared stale-reference grep
@@ -237,6 +239,13 @@ include = ["**/*.py"]
 
 [tool.filepawl.fakes.exempt]
 # "path::qualified.name" = reason. Human-edited. A fake that calls own code on purpose.
+
+[tool.filepawl.clocks]
+include = ["**/*.py"]
+names = ["timeout", "interval", "delay"]
+
+[tool.filepawl.clocks.exempt]
+# "path::qualified.name" = reason. Human-edited. A function that runs on the wall clock on purpose.
 
 [tool.filepawl.python]
 include = ["**/*.py"]
@@ -445,7 +454,7 @@ No absence finding is fixable by `accept`, and `accept` leaves state unchanged.
 
 ### 6.12 Test-suite gates, shared rules
 
-The absence gate and the seven gates after it read a repository's tests for shapes that pass whatever the code does. They share the rules in this section.
+The absence gate and the eight gates after it read a repository's tests for shapes that pass whatever the code does. They share the rules in this section.
 
 Checked files: tree files matched by the gate's own `include` and by a `tests` glob, as in §6.11. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6.
 
@@ -547,6 +556,19 @@ A fake that works out its reply by calling the code under test is a second copy 
 
 A site gate. A fake is a function or class whose name, leading underscores dropped, starts with `fake` or `Fake`, and every function and class in a checked file whose name starts with `fake`. A site is a call, anywhere inside a fake, whose callee is own-rooted and whose last name starts with a lower-case letter or `_`. Constructing an own class, a callee whose last name starts with a capital, is not a site: a fake builds its reply out of own types. A failing unit is reported as `path::unit: computes a reply with own code at line N — answer from a table the test writes`, and an exemption that excuses nothing as `calls no own code, so it needs no exemption`.
 
+### 6.20 Clocks gate
+
+A test that waits on the wall clock tests how long the machine takes, not what the code concludes, and every such wait is paid on every run. A retry, poll or deadline loop is tested for how many passes it makes and what it decides. The fix is a clock the test advances: the code paces itself through an injected `sleep` and `monotonic`, and the test hands it a pair where sleeping advances the time the other reads.
+
+A site gate. Small is a number above 0 and under 0.5 seconds: a ceiling a test never reaches is in seconds, and a deadline the code waits out is a fraction of one. A small duration is an `int` or `float` constant that is small, or a conditional expression either branch of which is a small duration. A site is, by dotted name as §6.12 resolves it:
+
+- a call to `time.sleep`, `asyncio.sleep`, `trio.sleep` or `anyio.sleep`, unless its first positional argument is the numeric literal `0`, which yields to the scheduler and waits on nothing; a sleep whose argument is a name or an attribute is a site, and a `.sleep` on any other receiver is a seam the test controls and is not;
+- a call to `time.time`, `time.time_ns`, `time.monotonic`, `time.monotonic_ns`, `time.perf_counter`, `time.perf_counter_ns`, `datetime.datetime.now`, `datetime.datetime.utcnow`, `datetime.datetime.today` or `datetime.date.today`, which reads a real clock; naming one without calling it, as the default of a seam, is not a site;
+- a keyword argument, or a string key of a dict display, whose name is in `names` or ends in `_` followed by a name in `names`, given a small duration, as in `poll_interval=0.02` or `{"read_timeout": 0.05}`;
+- a small duration as the second positional argument of `asyncio.wait_for` or the first of `asyncio.timeout`.
+
+`names` defaults to `timeout`, `interval` and `delay`; a repository whose code paces on another name adds it. A failing unit is reported as `path::unit: runs on the wall clock at line N — pace it through a clock the test advances`, and an exemption that excuses nothing as `runs on no wall clock, so it needs no exemption`.
+
 ## 7. CLI
 
 ```
@@ -619,6 +641,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Snapshots gate: a display at `max_items` leaves passes and one over fails; dict keys do not count; a golden read through `__file__` directly, through a module-level name and through a local name fails; a read of a temporary file passes; `snapshot` fails; `!=` is not read; exemption and each audit message.
 - Test-names gate: fewer than `min_words` words fails; a trailing number fails; a class name's words count for a method; exemption and each audit message.
 - Existence gate: each existence form fails alone and beside absence assertions; an existence assertion beside a value assertion passes; all-absence tests are left to the absence gate; `pytest.raises` counts as asserting something else; exemption and each audit message.
+- Clocks gate: port the cases of Trivia Judge's `tests/gates/test_test_clocks.py` and Gauntlet's `test_clocks_selftest.py`, the case in which `interval=0.05` passes inverted; each sleep module through `import`, `from` and an alias, a zero sleep, a sleep on a name and on a seam; each clock read, and a clock named without a call; each pacing name bare and suffixed, as a keyword and as a dict key, small and in seconds and zero, and inside a conditional expression; a name added to `names`; the `asyncio.wait_for` and `asyncio.timeout` positions; exemption and each audit message.
 - Fakes gate: a fake by name and by file name; a lower-case own callee fails and a capitalised one passes; a third-party call passes; a call outside a fake passes; exemption and each audit message.
 - `accept`: adds, lowers, refuses to raise, drops stale, preserves reason, stable sort.
 - `init`: fresh tree, refuses overwrite, appends policy stub once.
@@ -632,6 +655,8 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 Per repository, one PR:
 
 1. Add `filepawl` to dev dependencies (git URL pinned to a tag) and a pre-commit entry `repo: https://github.com/ohshitgorillas/filepawl`, `rev: vX.Y.Z`, hook `filepawl`. 2. Write `[tool.filepawl]` in `pyproject.toml` only where the repository departs from defaults: HQPTuner adds a `javascript` block and the `junkcal_fixture.py` exemption; Gauntlet adds `**/*.sh` to `include`. For the barrels gate, HQPTuner sets `include` to `hqptuner/**/*.py` and `scripts/**/*.py`, `forwarders` to its `core`, `lanes`, `presets`, `engine` and `conf` packages, and carries its two `presetops.py` forwarder exemptions over with their reasons. Trivia Judge sets `include` and `forwarders` to `triviajudge/**` and `scripts/**`. Gauntlet sets `include` to `hooks/**/*.py` and `scripts/**/*.py`. Gauntlet's script also reads untracked files, and filepawl does not. The nesting gate needs no policy in any of the three: its default `include` is the file set all three measure, and none carries a nesting exemption. The returns gate is new to all three; its findings are decided per repository, as directory-gate findings are. So is the absence gate, whose findings fall in each repository's tests. 3. Run `filepawl init`. Existing `ALLOWANCE` values need no import: the old ratchet already forced exact equality with current lengths, so `init` reproduces them. Carry Trivia Judge's per-entry comments over with `filepawl accept <path> --reason "..."`. 4. Run `filepawl check`; expect clean. Directory gate may surface new findings; those are decided per repository, not silently exempted. 5. Delete the old length, barrels and nesting scripts, their tests, and their Makefile / pre-commit / gate-runner wiring. Replace the CONTRIBUTING and CLAUDE.md prose with one line pointing at `filepawl check` and `filepawl accept`.
+
+For the clocks gate, HQPTuner sets `names` to `timeout`, `interval`, `delay` and `alarm_threshold`, and exempts per function, with its reason, each browser test whose bounded wait the gate reports.
 
 ## 11. Open items deferred
 

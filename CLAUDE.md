@@ -28,6 +28,12 @@ The nesting gate is an extraction the same way, from:
 - `~/dev/triviajudge/scripts/gates/code/check_nesting.py`, tests `~/dev/triviajudge/tests/gates/test_check_nesting.py`
 - `~/dev/gauntlet/scripts/gates/code/nesting.py`, cases in `~/dev/gauntlet/scripts/gates/code/nesting_selftest.py`
 
+The clocks gate's source of truth is:
+
+- HQPTuner's `scripts/gates/testing/check_test_clocks.py`, with no tests
+- `~/dev/triviajudge/scripts/gates/suite/check_test_clocks.py`, tests `~/dev/triviajudge/tests/gates/test_test_clocks.py`
+- `~/dev/gauntlet/scripts/gates/testpolicy/test-clocks.py`, cases in `~/dev/gauntlet/scripts/gates/testpolicy/test_clocks_selftest.py`
+
 Where the three disagree, the spec's decisions table rules; where it too is silent, the disagreement goes to the owner with the three behaviors quoted.
 
 

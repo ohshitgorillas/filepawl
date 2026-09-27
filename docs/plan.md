@@ -187,7 +187,13 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`feat: own code`**: the `packages` key in `filepawl/config.py` and the derivation, own bindings and dotted names in `filepawl/gates/suite/common.py`; tests in `tests/suite/test_common.py`.
 - **`docs: widen the mocks gate`**: `docs/design.md` §2, §4, §6.14, §9, the gate failing every patch whatever its target; `filepawl/policy_stub.py`; `docs/plan.md`.
 - Per gate, in the order private, mocks, environment, snapshots, test names, existence, fakes: **`feat: <gate> policy`** in `filepawl/config_suite.py`, registry and stub; **`test: ...`** rewriting any test in this tree the gate fails, where one does, with no exemption; **`feat: <gate> gate`** in `filepawl/gates/suite/<gate>.py`, tests in `tests/suite/`, `filepawl check` green on this tree.
-- **`docs: test-suite gates in README and changelog`**: `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
+- **`docs: test-suite gates in README and changelog`**: `README.md` and the `[Unreleased]` section of `CHANGELOG.md`, the clocks gate included.
+
+### Clocks gate (spec §6.20)
+
+- **`docs: clocks gate spec`**: `docs/design.md` §1, §2, §3, §4, §6.12, §6.20, §9, §10; `docs/plan.md`; `CLAUDE.md` ported-behavior list.
+- **`feat: clocks policy`**: `ClocksPolicy` in `filepawl/config_suite.py` (`enabled`, `include`, `exempt`, `names`), registry and stub; the site engine hands each gate the policy; tests in `tests/suite/test_config_suite.py` and `tests/test_gate_registry.py`.
+- **`feat: clocks gate`**: `filepawl/gates/suite/clocks.py`, last entry of `_BUILTIN_GATES`; tests in `tests/suite/test_clocks_gate.py`, the ported cases citing their source; `filepawl check` green on this tree.
 
 ## Verification (orchestrator, end)
 
