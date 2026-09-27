@@ -128,6 +128,11 @@ def _failing(func: _Function) -> list[int]:
     return sorted(lines)
 
 
+def failing_names(module: ast.Module) -> frozenset[str]:
+    """Return the qualified name of every function the gate fails in a module."""
+    return frozenset(name for name, held in function_returns(module) if _failing(held))
+
+
 @dataclass
 class HandlersGate:
     """Refuses functions that hand the caller a value from an exception handler."""

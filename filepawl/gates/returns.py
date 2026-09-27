@@ -85,6 +85,13 @@ def _spell(shape: _Shape) -> str:
     return "{" + ", ".join(sorted(shape)) + "}"
 
 
+def failing_names(module: ast.Module) -> frozenset[str]:
+    """Return the qualified name of every function the gate fails in a module."""
+    return frozenset(
+        name for name, shapes in returned_shapes(module) if len(_distinct(shapes)) > 1
+    )
+
+
 @dataclass
 class ReturnsGate:
     """Refuses functions whose dict-literal returns carry different key sets."""
