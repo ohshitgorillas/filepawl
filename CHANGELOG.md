@@ -11,6 +11,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **The absence gate fails tests that assert only an absent value.** A test whose every `assert` compares against `None`, `False`, `0`, `""`, an empty list or dict, a tuple of such values or an empty constructor, or is `not <expr>`, and which asserts nothing else, fails: code that never ran the feature passes it too. Only test paths are checked.
 - **The absence gate reads `[tool.filepawl.absence]` in `pyproject.toml`.** `include` narrows which test files it checks, `exempt` excuses one test keyed `path::qualified.name` with a reason, and `enabled = false` turns the gate off. An exemption naming a missing file, a missing test or a test that asserts a present value is reported as a finding.
 - **The `filepawl init` stub gains the absence block.**
+- **The private gate fails tests that reach a private name.** A test that reads or writes `obj._x`, names a private attribute through `getattr`, `setattr`, `patch.object` or a dotted `patch` string, or imports a private module or name of the repository's own code fails. `self` and `cls`, dunders, named-tuple members and names the test file defines pass.
+- **The mocks gate fails tests that patch.** Every `patch` form, `monkeypatch.setattr` and `delattr`, `setitem` and `delitem` outside `sys.modules` and `os.environ`, assignment to an attribute of an imported name, and a `Mock` with `spec`, `spec_set` or `create_autospec` fails, whatever it replaces.
+- **The clocks gate fails tests that run on the wall clock.** A real sleep on anything but `0`, a call that reads a real clock, and a duration under half a second given to `timeout`, `interval`, `delay` or a name ending in one of them fail, however the clock is imported and in every test directory.
+- **`[tool.filepawl] packages` names the repository's own code.** When absent, it is derived from the tree's non-test Python files.
+- **The private, mocks and clocks gates read `[tool.filepawl.private]`, `[tool.filepawl.mocks]` and `[tool.filepawl.clocks]`.** Each takes `include`, `exempt` keyed `path::qualified.name` with a reason, and `enabled`; `clocks` also takes `names`, the pacing names it reads. An exemption that excuses nothing fails. The `filepawl init` stub carries all three.
+
+### Changed
+
+- **`filepawl check` can report absence, private, mocks and clocks findings on test suites that passed before.**
 
 ## 0.7.0 - 2026-09-26
 

@@ -1,6 +1,6 @@
 # filepawl
 
-Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting, return-shape, named-results, exception-handler and absence gates, packaged as one installable CLI.
+Keeps code files short: a file-length ratchet plus directory-count, barrel, nesting, return-shape, named-results, exception-handler, absence, private, mocks and clocks gates, packaged as one installable CLI.
 
 The idea: a file under a "watch" line is unrestricted. Once it crosses that line it needs an allowance entry recording its length, and the allowance can only be lowered or dropped, never raised — so a file that grows past its recorded length fails until it is split, and one that shrinks must have its entry brought down to match. A hard cap still blocks any file, watched or not, from growing without bound. A second, stateless gate caps how many files sit directly in one directory.
 
@@ -180,6 +180,25 @@ include = ["**/*.py"]
 [tool.filepawl.absence.exempt]
 # "path::qualified.name" = reason. A test that asserts only an absent value on purpose.
 
+[tool.filepawl.private]
+include = ["**/*.py"]
+
+[tool.filepawl.private.exempt]
+# "path::qualified.name" = reason. A function that reaches a private name on purpose.
+
+[tool.filepawl.mocks]
+include = ["**/*.py"]
+
+[tool.filepawl.mocks.exempt]
+# "path::qualified.name" = reason. A function that patches on purpose.
+
+[tool.filepawl.clocks]
+include = ["**/*.py"]
+names = ["timeout", "interval", "delay"]
+
+[tool.filepawl.clocks.exempt]
+# "path::qualified.name" = reason. A function that runs on the wall clock on purpose.
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -216,6 +235,9 @@ The hook runs `filepawl check` over the whole tree on every commit (`pass_filena
 - **Named-results gate**: refuses a return annotation or module-level alias that names `dict`, `Dict`, `Mapping` or `MutableMapping` with an `Any` or `object` value type, or one of those names on its own, such as `-> dict[str, Any]` or `Wire = dict[str, Any]`. It reads the whole annotation: inside `|`, `Optional`, `list`, `tuple`, `Callable` and quoted forms, and a value type such as `Any | None`. Test paths are skipped, and `exclude` globs take paths out of scope. There are no exemptions; parsed JSON is typed with a recursive alias such as `JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]`.
 - **Handlers gate**: refuses a function that returns a value from an `except` or `except*` handler, `return None` included, because the caller gets a sentinel where an exception was. A bare `return` in a handler fails only when the function returns a value elsewhere. A name assigned in a handler fails when a value return reads it, so `except E: result = {}` followed by `return result` fails like `return {}`. A nested `def` or `lambda` is judged on its own. Test paths are skipped. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
 - **Absence gate**: refuses a test whose every `assert` claims only that something is absent — `== []`, `== ""`, `is None`, `== 0`, `not x`, a tuple of such values — and which asserts nothing else, because code that never ran the feature passes it too. Assert the absence beside a case where the feature acts, as in `assert (run(clean), run(dirty)) == ([], [finding])`, or add a present-value assertion on the same surface. A `pytest.raises`, `pytest.warns` or `pytest.deprecated_call` block, or an `assert*` method call such as `mock.assert_called_once_with`, counts as asserting something else; a test with no `assert` is left alone. Each test is judged on its own, so a passing sibling does not excuse it. Only test paths are checked. Exemptions are per test, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
+- **Private gate**: refuses a test that reads or writes a private attribute (`obj._x`), names one through `getattr`, `setattr`, `patch.object` or a dotted `patch` string, or imports a private module or name of the repository's own code, because it pins the layout instead of the behavior. `self` and `cls` receivers, dunders, named-tuple members such as `_replace`, and names the test file defines itself pass. Only test paths are checked. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
+- **Mocks gate**: refuses a test that replaces anything with a stand-in: every `patch` form, `monkeypatch.setattr` and `delattr`, `setitem` and `delitem` on any mapping but `sys.modules` and `os.environ`, an assignment or `del` on an attribute of an imported name, and a `Mock` built with `spec` or `spec_set` or through `create_autospec`. What the patch replaces, own code or third-party, does not matter. Setting the process a test runs in (`chdir`, `setenv`, `delenv`, `syspath_prepend`) is not a patch. Fake at the wire instead: a fake server, a fake tree, or the value handed in as an argument. Only test paths are checked. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
+- **Clocks gate**: refuses a test that runs on the wall clock: a `time`, `asyncio`, `trio` or `anyio` sleep on anything but a literal `0`, a call that reads a real clock (`time.time`, `time.monotonic`, `time.perf_counter`, `datetime.now`, `date.today` and their kin), or a duration above 0 and under half a second given to a pacing name, such as `timeout=0.05`, `poll_interval=0.02` or `{"read_timeout": 0.1}`, or as the deadline of `asyncio.wait_for` or `asyncio.timeout`. A pacing name is one listed in `names` (default `timeout`, `interval`, `delay`) or ending in `_` plus one of them. Imports are resolved, so `from time import sleep` counts. A sleep on a clock the test controls, a ceiling of seconds, and a clock passed uncalled as a default all pass. There is no directory carve-out. Only test paths are checked. Exemptions are per function, keyed `path::qualified.name`, live in policy with a reason, and an exemption that excuses nothing fails.
 
 The gates, and the mover backends, are registries: a `[tool.filepawl.<gate>]` table with `enabled = false` turns a built-in gate off, and third parties can add their own gate or mover under the `filepawl.gates` / `filepawl.movers` entry-point groups.
 
