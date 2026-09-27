@@ -34,6 +34,7 @@ filepawl accept [PATH...] [--reason TEXT]
 filepawl init
 filepawl mv OLD NEW
 filepawl hook
+filepawl judge [--head]
 ```
 
 ### `filepawl init`
@@ -106,6 +107,21 @@ Checks an agent's edit before it lands. The Claude Code plugin runs it on every 
 ```
 filepawl: pkg/big.py: in the length ratchet at 450 lines; this edit takes it 450 → 458. 8 lines over the allowance; split them out before committing. Plan the split now; it is mechanical and can be delegated.
 ```
+
+### `filepawl judge`
+
+Asks a model whether a change that silenced the handlers or returns gate fixed what the gate targets, or moved the failure onto a route the gate does not trace: a default assigned before the `try` and returned after it, an item set in the handler, `contextlib.suppress` with a fallback after it, a `dict(...)` call beside a dict literal. It is off until `[tool.filepawl.judge]` sets `enabled = true`.
+
+`filepawl judge` compares the staged tree with `HEAD`; `filepawl judge --head` compares `HEAD` with its first parent. A case is a function, in a Python file changed in place, that fails the handlers or returns gate before the change and exists and passes after it. A function that moved to another file is not a case, since the gate measures it where it lands. Each case goes to the model with the function before and after and every function the change adds to the file, and comes back `dodge` or `clean` with a one-sentence reason.
+
+```
+$ filepawl judge
+pkg/io.py::load: handlers judge: the None assigned before the try still stands in for the failed read — fix it on a route the gate traces, or exempt it with a reason
+```
+
+It exits 0 when no case is a dodge, 1 on a dodge or a stale exemption, and 2 on a configuration error, a missing `claude`, or a call that fails twice. An answer the judge cannot read is asked again once, and a case still without a verdict counts as a dodge. A function whose silence a specification requires is exempted in `[tool.filepawl.judge.exempt]` with its reason; an entry naming no Python file or no function is reported under `pyproject.toml`.
+
+The model is reached through the `claude` CLI on `PATH`, in print mode, with no tools and no settings, billed to the account `claude` is logged in to. A change that silences nothing makes no call and costs nothing. A run with cases makes one call per `batch` cases (default 6) with model `model` (default `claude-sonnet-5`), plus at most one retry per call and one more call for cases left unanswered; each call is stopped after `timeout` seconds (default 300). The call runs with `FILEPAWL_JUDGE_INNER=1` set, and `filepawl judge` exits 0 at once under it, so a hook in the model's session cannot start a second judge.
 
 ## Claude Code plugin
 
@@ -199,6 +215,15 @@ names = ["timeout", "interval", "delay"]
 [tool.filepawl.clocks.exempt]
 # "path::qualified.name" = reason. A function that runs on the wall clock on purpose.
 
+[tool.filepawl.judge]
+enabled = false
+model = "claude-sonnet-5"
+batch = 6
+timeout = 300
+
+[tool.filepawl.judge.exempt]
+# "path::qualified.name" = reason. A function the judge must not be asked about.
+
 [tool.filepawl.python]
 include = ["**/*.py"]
 mover = "rope"
@@ -221,9 +246,10 @@ repos:
     rev: <tag>
     hooks:
       - id: filepawl
+      - id: filepawl-judge
 ```
 
-The hook runs `filepawl check` over the whole tree on every commit (`pass_filenames: false`, `always_run: true`); one hook covers every configured language.
+The `filepawl` hook runs `filepawl check` over the whole tree on every commit (`pass_filenames: false`, `always_run: true`); one hook covers every configured language. The `filepawl-judge` hook runs `filepawl judge` the same way and does nothing until the judge is enabled in policy.
 
 ## Gates, briefly
 

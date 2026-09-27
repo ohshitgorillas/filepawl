@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`filepawl judge` fails a commit that hides a handlers or returns finding instead of fixing it.** Each dodge prints one line naming the function and the reason. `--head` checks the last commit. The judge needs the `claude` CLI, and a commit that silences no finding costs no call.
+- **Consumers can turn the judge on per repository and keep chosen functions from it.** It is off until `[tool.filepawl.judge] enabled = true`; `model`, `batch` and `timeout` shape the calls, and `exempt` excuses a function with a reason.
+- **A consumer can run the judge on every commit** by listing the `filepawl-judge` hook beside `filepawl`.
+
 ## 0.8.0 - 2026-09-26
 
 ### Added
