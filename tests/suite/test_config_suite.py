@@ -12,7 +12,7 @@ from filepawl.errors import ConfigError
 from filepawl.policy_stub import DEFAULT_POLICY_STUB
 
 #: Gates whose table holds only `include`, `exempt` and `enabled`.
-PLAIN_GATES = ["absence", "private"]
+PLAIN_GATES = ["absence", "private", "mocks"]
 
 
 def write(root: Path, text: str) -> None:

@@ -25,15 +25,17 @@ class SuitePolicies:
 
     absence: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     private: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
+    mocks: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
 
 
-SUITE_TABLES = ("absence", "private")
+SUITE_TABLES = ("absence", "private", "mocks")
 
 
 def build_suite(raw: dict[str, object]) -> SuitePolicies:
     return SuitePolicies(
         absence=_build_plain("absence", raw.get("absence")),
         private=_build_plain("private", raw.get("private")),
+        mocks=_build_plain("mocks", raw.get("mocks")),
     )
 
 

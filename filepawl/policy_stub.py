@@ -80,6 +80,13 @@ DEFAULT_POLICY_STUB = (
             '# "path::qualified.name" = reason. Human-edited. A function that '
             "reaches a private name on purpose.",
             "",
+            "[tool.filepawl.mocks]",
+            'include = ["**/*.py"]',
+            "",
+            "[tool.filepawl.mocks.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A function that '
+            "patches own code on purpose.",
+            "",
             "[tool.filepawl.python]",
             'include = ["**/*.py"]',
             'mover = "rope"',
