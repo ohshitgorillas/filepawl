@@ -3,242 +3,53 @@
 from __future__ import annotations
 
 import dataclasses
-import sys
-import types
+import importlib
 from pathlib import Path
 
 import pytest
 
-from filepawl.config import (
-    NamedResultsPolicy,
-    NestingPolicy,
-    ReturnsPolicy,
-    default_policy,
-)
+from filepawl.config import Policy, default_policy
+from filepawl.config_suite import SUITE_TABLES
 from filepawl.errors import ConfigError
 from filepawl.gates import registry
 
-
-class _StubGate:
-    """A gate with a fixed name that lets registry ordering and enable logic
-    be tested independent of the built-in gates."""
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-    def run(self, tree: object, policy: object, state: object) -> list[object]:
-        return []
-
-    def accept(self, tree: object, policy: object, state: object) -> object:
-        return state
+BUILTINS = [
+    "length",
+    "dircount",
+    "barrels",
+    "nesting",
+    "returns",
+    "named_results",
+    "handlers",
+    "absence",
+]
 
 
-def _install_fake_module(
-    monkeypatch: pytest.MonkeyPatch, dotted_name: str, factory_name: str, gate_name: str
-) -> None:
-    module = types.ModuleType(dotted_name)
-    setattr(module, factory_name, lambda: _StubGate(gate_name))
-    monkeypatch.setitem(sys.modules, dotted_name, module)
-
-
-def _patch_builtins(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fake_module(monkeypatch, "fake_length_mod", "FakeLength", "length")
-    _install_fake_module(monkeypatch, "fake_dircount_mod", "FakeDircount", "dircount")
-    monkeypatch.setattr(
-        registry,
-        "_BUILTIN_GATES",
-        (
-            ("length", "fake_length_mod", "FakeLength"),
-            ("dircount", "fake_dircount_mod", "FakeDircount"),
-        ),
-    )
-
-
-def test_nesting_disabled_via_policy_nesting_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _install_fake_module(monkeypatch, "fake_nesting_mod", "FakeNesting", "nesting")
-    monkeypatch.setattr(
-        registry, "_BUILTIN_GATES", (("nesting", "fake_nesting_mod", "FakeNesting"),)
-    )
-    monkeypatch.setattr(registry, "entry_points", lambda group: [])
-    policy = dataclasses.replace(default_policy(), nesting=NestingPolicy(enabled=False))
-
-    enabled = [g.name for g in registry.discover_gates(default_policy())]
-    disabled = [g.name for g in registry.discover_gates(policy)]
-    assert (enabled, disabled) == (["nesting"], [])
-
-
-def test_returns_disabled_via_policy_returns_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _install_fake_module(monkeypatch, "fake_returns_mod", "FakeReturns", "returns")
-    monkeypatch.setattr(
-        registry, "_BUILTIN_GATES", (("returns", "fake_returns_mod", "FakeReturns"),)
-    )
-    monkeypatch.setattr(registry, "entry_points", lambda group: [])
-    policy = dataclasses.replace(default_policy(), returns=ReturnsPolicy(enabled=False))
-
-    enabled = [g.name for g in registry.discover_gates(default_policy())]
-    disabled = [g.name for g in registry.discover_gates(policy)]
-    assert (enabled, disabled) == (["returns"], [])
-
-
-def test_named_results_disabled_via_policy_named_results_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _install_fake_module(monkeypatch, "fake_named_mod", "FakeNamed", "named_results")
-    monkeypatch.setattr(
-        registry,
-        "_BUILTIN_GATES",
-        (("named_results", "fake_named_mod", "FakeNamed"),),
-    )
-    monkeypatch.setattr(registry, "entry_points", lambda group: [])
-    policy = dataclasses.replace(
-        default_policy(), named_results=NamedResultsPolicy(enabled=False)
-    )
-
-    enabled = [g.name for g in registry.discover_gates(default_policy())]
-    disabled = [g.name for g in registry.discover_gates(policy)]
-    assert (enabled, disabled) == (["named_results"], [])
-
-
-def test_handlers_disabled_via_policy_handlers_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _install_fake_module(monkeypatch, "fake_handlers_mod", "FakeHandlers", "handlers")
-    monkeypatch.setattr(
-        registry,
-        "_BUILTIN_GATES",
-        (("handlers", "fake_handlers_mod", "FakeHandlers"),),
-    )
-    monkeypatch.setattr(registry, "entry_points", lambda group: [])
-    handlers = dataclasses.replace(default_policy().handlers, enabled=False)
-    policy = dataclasses.replace(default_policy(), handlers=handlers)
-
-    enabled = [g.name for g in registry.discover_gates(default_policy())]
-    disabled = [g.name for g in registry.discover_gates(policy)]
-    assert (enabled, disabled) == (["handlers"], [])
-
-
-@pytest.mark.parametrize("gate", ["absence", "private"])
-def test_suite_gate_disabled_via_its_policy_table(
-    gate: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _install_fake_module(monkeypatch, f"fake_{gate}_mod", "FakeSuiteGate", gate)
-    monkeypatch.setattr(
-        registry,
-        "_BUILTIN_GATES",
-        ((gate, f"fake_{gate}_mod", "FakeSuiteGate"),),
-    )
-    monkeypatch.setattr(registry, "entry_points", lambda group: [])
-    suite = default_policy().suite
-    off = dataclasses.replace(getattr(suite, gate), enabled=False)
-    policy = dataclasses.replace(
-        default_policy(), suite=dataclasses.replace(suite, **{gate: off})
-    )
-
-    enabled = [g.name for g in registry.discover_gates(default_policy())]
-    disabled = [g.name for g in registry.discover_gates(policy)]
-    assert (enabled, disabled) == ([gate], [])
-
-
-class _FakeEntryPoint:
-    def __init__(self, name: str, loader: object) -> None:
-        self.name = name
-        self._loader = loader
-
-    def load(self) -> object:
-        return self._loader()
-
-
-def test_builtins_come_first_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_builtins(monkeypatch)
-    monkeypatch.setattr(registry, "entry_points", lambda group: [])
-
-    gates = registry.discover_gates(default_policy())
-
-    assert [g.name for g in gates] == ["length", "dircount"]
-
-
-def test_length_disabled_via_policy_length_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_builtins(monkeypatch)
-    monkeypatch.setattr(registry, "entry_points", lambda group: [])
+def _disabled(name: str) -> Policy:
     policy = default_policy()
-    policy = policy.__class__(
-        languages=policy.languages,
-        tests=policy.tests,
-        length=policy.length.__class__(
-            cap=policy.length.cap,
-            cap_tests=policy.length.cap_tests,
-            watch=policy.length.watch,
-            enabled=False,
-        ),
-        dircount=policy.dircount,
-        exempt=policy.exempt,
-        gate_tables=policy.gate_tables,
+    if name in SUITE_TABLES:
+        off = dataclasses.replace(getattr(policy.suite, name), enabled=False)
+        return dataclasses.replace(
+            policy, suite=dataclasses.replace(policy.suite, **{name: off})
+        )
+    off = dataclasses.replace(getattr(policy, name), enabled=False)
+    return dataclasses.replace(policy, **{name: off})
+
+
+def _names(policy: Policy) -> list[str]:
+    return [gate.name for gate in registry.discover_gates(policy)]
+
+
+@pytest.mark.parametrize("name", BUILTINS)
+def test_builtin_gate_is_dropped_when_its_table_disables_it(name: str) -> None:
+    assert (name in _names(default_policy()), name in _names(_disabled(name))) == (
+        True,
+        False,
     )
 
-    gates = registry.discover_gates(policy)
 
-    assert [g.name for g in gates] == ["dircount"]
-
-
-def test_dircount_disabled_via_policy_dircount_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_builtins(monkeypatch)
-    monkeypatch.setattr(registry, "entry_points", lambda group: [])
-    policy = default_policy()
-    policy = policy.__class__(
-        languages=policy.languages,
-        tests=policy.tests,
-        length=policy.length,
-        dircount=policy.dircount.__class__(
-            cap=policy.dircount.cap,
-            cap_tests=policy.dircount.cap_tests,
-            exclude=policy.dircount.exclude,
-            enabled=False,
-        ),
-        exempt=policy.exempt,
-        gate_tables=policy.gate_tables,
-    )
-
-    gates = registry.discover_gates(policy)
-
-    assert [g.name for g in gates] == ["length"]
-
-
-def test_entry_point_load_failure_raises_config_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(registry, "_BUILTIN_GATES", ())
-
-    def _boom() -> object:
-        raise ImportError("no such module")
-
-    ep = _FakeEntryPoint("bad", _boom)
-    monkeypatch.setattr(registry, "entry_points", lambda group: [ep])
-
-    with pytest.raises(ConfigError, match="bad"):
-        registry.discover_gates(default_policy())
-
-
-def test_entry_point_missing_gate_attrs_raises_config_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(registry, "_BUILTIN_GATES", ())
-
-    class _NotAGate:
-        pass
-
-    ep = _FakeEntryPoint("incomplete", lambda: _NotAGate())
-    monkeypatch.setattr(registry, "entry_points", lambda group: [ep])
-
-    with pytest.raises(ConfigError, match="incomplete"):
-        registry.discover_gates(default_policy())
+def test_default_policy_discovers_builtins_first_in_order() -> None:
+    assert _names(default_policy())[: len(BUILTINS)] == BUILTINS
 
 
 def _write(path: Path, content: str) -> None:
@@ -246,59 +57,54 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def test_entry_point_discovered_from_real_distribution(
+def _install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, module: str, source: str
+) -> None:
+    """Install a real distribution whose `filepawl.gates` entry point is
+    `<module>:make`, found through importlib.metadata."""
+    dist_dir = tmp_path / "dist"
+    _write(dist_dir / module / "__init__.py", source)
+    info = dist_dir / f"{module}-0.1.dist-info"
+    _write(info / "METADATA", f"Metadata-Version: 2.1\nName: {module}\nVersion: 0.1\n")
+    _write(info / "entry_points.txt", f"[filepawl.gates]\n{module} = {module}:make\n")
+    monkeypatch.syspath_prepend(str(dist_dir))
+    importlib.invalidate_caches()
+
+
+GATE_SOURCE = (
+    "class FakeGate:\n"
+    "    name = 'fake'\n"
+    "    def run(self, tree, policy, state):\n"
+    "        return []\n"
+    "    def accept(self, tree, policy, state):\n"
+    "        return state\n"
+    "def make():\n"
+    "    return FakeGate()\n"
+)
+
+
+def test_entry_point_gate_is_discovered_unless_its_table_disables_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Build a minimal, real installed distribution (a package plus a
-    .dist-info with entry_points.txt) and prove filepawl finds its gate
-    through importlib.metadata, not through a mocked entry_points()."""
-    monkeypatch.setattr(registry, "_BUILTIN_GATES", ())
-
-    dist_dir = tmp_path / "dist"
-    _write(
-        dist_dir / "fakegate" / "__init__.py",
-        "class FakeGate:\n"
-        "    name = 'fake'\n"
-        "    def run(self, tree, policy, state):\n"
-        "        return []\n"
-        "    def accept(self, tree, policy, state):\n"
-        "        return state\n",
+    _install(tmp_path, monkeypatch, "fpgate_real", GATE_SOURCE)
+    off = dataclasses.replace(
+        default_policy(), gate_tables={"fake": {"enabled": False}}
     )
-    _write(
-        dist_dir / "fakegate-0.1.dist-info" / "METADATA",
-        "Metadata-Version: 2.1\nName: fakegate\nVersion: 0.1\n",
-    )
-    _write(
-        dist_dir / "fakegate-0.1.dist-info" / "entry_points.txt",
-        "[filepawl.gates]\nfake = fakegate:FakeGate\n",
-    )
-
-    monkeypatch.syspath_prepend(str(dist_dir))
-    import importlib as _importlib
-
-    _importlib.invalidate_caches()
-
-    gates = registry.discover_gates(default_policy())
-    assert [g.name for g in gates] == ["fake"]
-
-    policy = default_policy()
-    policy = policy.__class__(
-        languages=policy.languages,
-        tests=policy.tests,
-        length=policy.length,
-        dircount=policy.dircount,
-        exempt=policy.exempt,
-        gate_tables={"fake": {"enabled": False}},
-    )
-    gates = registry.discover_gates(policy)
-    assert gates == []
+    assert ("fake" in _names(default_policy()), "fake" in _names(off)) == (True, False)
 
 
-def test_default_policy_discovers_real_builtins_in_order() -> None:
-    pytest.importorskip("filepawl.gates.length")
-    pytest.importorskip("filepawl.gates.dircount")
+def test_entry_point_load_failure_raises_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install(tmp_path, monkeypatch, "fpgate_broken", "import no_such_module\n")
+    with pytest.raises(ConfigError, match="fpgate_broken"):
+        registry.discover_gates(default_policy())
 
-    gates = registry.discover_gates(default_policy())
 
-    names = [g.name for g in gates]
-    assert names[:2] == ["length", "dircount"]
+def test_entry_point_missing_gate_attrs_raises_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = "class NotAGate:\n    pass\ndef make():\n    return NotAGate()\n"
+    _install(tmp_path, monkeypatch, "fpgate_incomplete", source)
+    with pytest.raises(ConfigError, match="fpgate_incomplete"):
+        registry.discover_gates(default_policy())

@@ -337,12 +337,13 @@ class TestExemptions:
         ]
 
 
-def test_gate_is_the_last_built_in() -> None:
-    assert registry._BUILTIN_GATES[-1] == (
-        "absence",
-        "filepawl.gates.suite.absence",
-        "AbsenceGate",
-    )
+def test_gate_is_discovered_unless_its_table_disables_it() -> None:
+    on = registry.discover_gates(default_policy())
+    off = registry.discover_gates(_policy(enabled=False))
+    assert (
+        [type(gate) for gate in on if gate.name == "absence"],
+        [gate.name for gate in off if gate.name == "absence"],
+    ) == ([AbsenceGate], [])
 
 
 def test_accept_leaves_state_unchanged(repo: RepoFactory) -> None:
