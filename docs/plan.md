@@ -205,6 +205,11 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`chore: judge this repository's commits`**: `enabled = true` under `[tool.filepawl.judge]` in `pyproject.toml`, and `filepawl-judge` in `.pre-commit-config.yaml`.
 - **`docs: judge in README and changelog`**: `README.md`, including what a run costs, and the `[Unreleased]` section of `CHANGELOG.md`.
 
+### Dodge follow-up (spec §6.8, §6.9)
+
+- **`feat: named-results gate fails fields of unnamed type`**: a class field or method-declared attribute typed `Any`, `object`, a union holding one, or a loose mapping fails, qualifiers seen through, in `filepawl/gates/named_results.py` and §1, §2, §3, §6.9 and §9, tested in `tests/test_named_results_gate.py`; this tree's `Policy.gate_tables` names its value type; `README.md` and the `[Unreleased]` section of `CHANGELOG.md` describe the rule.
+- **`feat: returns gate fails padded shapes`**: a key whose value is an empty constant on some shaped returns of one shape and not on others fails, in `filepawl/gates/returns.py` and §2, §6.8 and §9, tested in `tests/test_returns_gate.py`; `README.md` and the `[Unreleased]` section of `CHANGELOG.md` describe the rule.
+
 ## Verification (orchestrator, end)
 
 ```

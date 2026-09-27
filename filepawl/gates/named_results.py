@@ -20,6 +20,9 @@ _FUNCS = (ast.FunctionDef, ast.AsyncFunctionDef)
 _MAPPINGS = frozenset({"dict", "Dict", "Mapping", "MutableMapping"})
 _LOOSE = frozenset({"Any", "object"})
 _UNIONS = frozenset({"Optional", "Union"})
+_QUALIFIERS = frozenset(
+    {"ClassVar", "Final", "Annotated", "InitVar", "Required", "NotRequired", "ReadOnly"}
+)
 
 # (qualified name, message) per failing function or alias, in source order.
 _Found = list[tuple[str, str]]
@@ -109,38 +112,75 @@ def _message(verb: str, node: ast.expr) -> str:
     return f"{verb} an unnamed mapping ({ast.unparse(node)}) — name its shape"
 
 
+def _unqualified(node: ast.expr) -> ast.expr | None:
+    """Return a field's type with ClassVar, Final and like qualifiers taken off."""
+    read = _read(node)
+    while isinstance(read, ast.Subscript) and _name(read.value) in _QUALIFIERS:
+        read = _read(_items(read)[0])
+    return read
+
+
+def is_loose_field(node: ast.expr) -> bool:
+    """Return whether a field's type is Any or object, or names an unnamed mapping."""
+    read = _unqualified(node)
+    return read is not None and (_holds_loose(read) or is_loose(read))
+
+
+def _declared(node: ast.AnnAssign, scope: str) -> str | None:
+    """Return the field a class-body name or a method's `self.x` annotation declares."""
+    target = node.target
+    if scope == "class" and isinstance(target, ast.Name):
+        return target.id
+    if scope != "function" or not isinstance(target, ast.Attribute):
+        return None
+    return target.attr if isinstance(target.value, ast.Name) else None
+
+
+def _fields(node: ast.stmt, prefix: str, scope: str) -> _Found:
+    """Return (qualified name, message) for a loose field the statement declares."""
+    if not isinstance(node, ast.AnnAssign) or not is_loose_field(node.annotation):
+        return []
+    field = _declared(node, scope)
+    if field is None:
+        return []
+    annotation = ast.unparse(node.annotation)
+    message = f"declares a field of unnamed type ({annotation}) — name its type"
+    return [(f"{prefix}{field}", message)]
+
+
 def _function(
     node: ast.FunctionDef | ast.AsyncFunctionDef, prefix: str, found: _Found
 ) -> None:
-    """Record a function whose return annotation is loose, then its nested functions."""
+    """Record a function whose return annotation is loose, then what it holds."""
     name = f"{prefix}{node.name}"
     if node.returns is not None and is_loose(node.returns):
         found.append((name, _message("returns", node.returns)))
-    _walk(node.body, f"{name}.", False, found)
+    _walk(node.body, f"{name}.", "function", found)
 
 
-def _walk(body: list[ast.stmt], prefix: str, module_level: bool, found: _Found) -> None:
-    """Record loose functions in a statement list, and loose aliases at module level."""
+def _walk(body: list[ast.stmt], prefix: str, scope: str, found: _Found) -> None:
+    """Record loose functions, fields and module-level aliases in a statement list."""
     for node in body:
         if isinstance(node, _FUNCS):
             _function(node, prefix, found)
         elif isinstance(node, ast.ClassDef):
-            _walk(node.body, f"{prefix}{node.name}.", False, found)
+            _walk(node.body, f"{prefix}{node.name}.", "class", found)
         else:
-            if module_level:
+            if scope == "module":
                 found += [
                     (alias, _message("aliases", value))
                     for alias, value in _aliases(node)
                     if is_loose(value)
                 ]
+            found += _fields(node, prefix, scope)
             for inner in block_bodies(node):
-                _walk(inner, prefix, module_level, found)
+                _walk(inner, prefix, scope, found)
 
 
 def loose_results(module: ast.Module) -> _Found:
-    """Return (qualified name, message) for each loose function and alias."""
+    """Return (qualified name, message) for each loose function, field and alias."""
     found: _Found = []
-    _walk(module.body, "", True, found)
+    _walk(module.body, "", "module", found)
     return found
 
 

@@ -186,6 +186,98 @@ class TestAliases:
         assert _run(root, _policy()) == [Finding("n.py::f", _returns("dict[str, Any]"))]
 
 
+def _declares(annotation: str) -> str:
+    return f"declares a field of unnamed type ({annotation}) — name its type"
+
+
+class TestFields:
+    @pytest.mark.parametrize(
+        "annotation",
+        [
+            "Any",
+            "object",
+            "typing.Any",
+            "Any | None",
+            "Optional[object]",
+            "Union[int, Any]",
+            "'Any'",
+            "ClassVar[Any]",
+            "Final[object]",
+            "Annotated[Any, 'meta']",
+            "InitVar[Any]",
+            "NotRequired[Any]",
+            "Required[Any | None]",
+            "ReadOnly[Any]",
+            "dict[str, Any]",
+            "list[Mapping[str, object]]",
+            "dict",
+        ],
+    )
+    def test_loose_class_field_fails(self, repo: RepoFactory, annotation: str) -> None:
+        root = repo({"m.py": f"class C:\n    x: {annotation}\n"})
+        assert _run(root, _policy()) == [Finding("m.py::C.x", _declares(annotation))]
+
+    @pytest.mark.parametrize(
+        "annotation",
+        [
+            "int",
+            "list[Any]",
+            "dict[str, int]",
+            "ClassVar[int]",
+            "Callable[..., Any]",
+            "JsonValue",
+        ],
+    )
+    def test_named_class_field_passes(self, repo: RepoFactory, annotation: str) -> None:
+        root = repo({"m.py": f"class C:\n    x: {annotation} = 1\n", "n.py": LOOSE})
+        assert _run(root, _policy()) == [Finding("n.py::f", _returns("dict[str, Any]"))]
+
+    def test_field_with_value_and_nested_class_named_by_qualified_name(
+        self, repo: RepoFactory
+    ) -> None:
+        source = (
+            "def build() -> int:\n"
+            "    class Local:\n"
+            "        class Inner:\n"
+            "            if True:\n"
+            "                y: object = None\n"
+            "    return 1\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [
+            Finding("m.py::build.Local.Inner.y", _declares("object"))
+        ]
+
+    def test_attribute_declared_in_a_method_fails(self, repo: RepoFactory) -> None:
+        source = (
+            "class C:\n"
+            "    def __init__(self) -> None:\n"
+            "        self.backfill: Any = None\n"
+            "        self.count: int = 0\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [
+            Finding("m.py::C.__init__.backfill", _declares("Any"))
+        ]
+
+    def test_local_variable_and_module_annotation_pass(self, repo: RepoFactory) -> None:
+        source = (
+            "x: Any = None\n"
+            "def f() -> int:\n"
+            "    y: object = 1\n"
+            "    return 1\n"
+            "class C:\n"
+            "    z = cast(Any, 1)\n"
+        )
+        root = repo({"m.py": source, "n.py": LOOSE})
+        assert _run(root, _policy()) == [Finding("n.py::f", _returns("dict[str, Any]"))]
+
+    def test_test_paths_are_not_checked(self, repo: RepoFactory) -> None:
+        field = "class C:\n    x: Any\n"
+        root = repo({"tests/test_m.py": field, "m.py": field})
+        assert _run(root, _policy()) == [Finding("m.py::C.x", _declares("Any"))]
+
+
 class TestFileSet:
     def test_test_paths_are_not_checked(self, repo: RepoFactory) -> None:
         root = repo({"tests/test_m.py": LOOSE, "m.py": LOOSE})

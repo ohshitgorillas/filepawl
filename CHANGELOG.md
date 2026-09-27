@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **The named-results gate fails a field of unnamed type.** A class field, or an attribute a method declares as `self.x: T`, typed `Any`, `object`, a union holding one, or a mapping the gate already refuses in a return annotation fails, with `ClassVar`, `Final`, `Annotated`, `InitVar`, `Required`, `NotRequired` and `ReadOnly` seen through.
+
+### Changed
+
+- **`filepawl check` can report named-results findings on classes that passed before.**
+
 ## 0.9.0 - 2026-09-26
 
 ### Added

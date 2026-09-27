@@ -6,7 +6,22 @@ returns the typed value or raises ConfigError naming that path.
 
 from __future__ import annotations
 
+from datetime import date, datetime, time
+
 from filepawl.errors import ConfigError
+
+# A value `tomllib` can produce, named whole so a table carries no unnamed shape.
+TomlValue = (
+    str
+    | int
+    | float
+    | bool
+    | datetime
+    | date
+    | time
+    | list["TomlValue"]
+    | dict[str, "TomlValue"]
+)
 
 
 def exempt_table(
@@ -59,3 +74,17 @@ def bool_value(value: object, where: str) -> bool:
     if not isinstance(value, bool):
         raise ConfigError(f"{where} must be a boolean")
     return value
+
+
+def gate_tables(
+    raw: dict[str, object], known: set[str]
+) -> dict[str, dict[str, TomlValue]]:
+    """Return the tables [tool.filepawl] keeps for third-party gates, by gate name."""
+    tables: dict[str, dict[str, TomlValue]] = {}
+    for key, value in raw.items():
+        if key in known:
+            continue
+        if not isinstance(value, dict):
+            raise ConfigError(f"unknown key {key!r} in [tool.filepawl]")
+        tables[key] = value
+    return tables

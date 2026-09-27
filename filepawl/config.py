@@ -8,9 +8,11 @@ from pathlib import Path
 
 from filepawl.config_suite import SUITE_TABLES, SuitePolicies, build_suite
 from filepawl.config_values import (
+    TomlValue,
     bool_value,
     check_keys,
     exempt_table,
+    gate_tables,
     int_value,
     positive_int,
     str_list,
@@ -130,7 +132,7 @@ class Policy:
     length: LengthPolicy
     dircount: DircountPolicy
     exempt: dict[str, str]
-    gate_tables: dict[str, dict[str, object]]
+    gate_tables: dict[str, dict[str, TomlValue]]
     barrels: BarrelsPolicy = field(default_factory=BarrelsPolicy)
     nesting: NestingPolicy = field(default_factory=NestingPolicy)
     returns: ReturnsPolicy = field(default_factory=ReturnsPolicy)
@@ -202,14 +204,6 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     languages = {name: _build_language(name, raw.get(name)) for name in language_names}
 
     known = set(_TOP_LEVEL_SCALAR_KEYS) | set(_RESERVED_TABLES) | set(language_names)
-    gate_tables: dict[str, dict[str, object]] = {}
-    for key, value in raw.items():
-        if key in known:
-            continue
-        if isinstance(value, dict):
-            gate_tables[key] = value
-        else:
-            raise ConfigError(f"unknown key {key!r} in [tool.filepawl]")
 
     return Policy(
         languages=languages,
@@ -217,7 +211,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         length=length,
         dircount=dircount,
         exempt=exempt,
-        gate_tables=gate_tables,
+        gate_tables=gate_tables(raw, known),
         barrels=barrels,
         nesting=nesting,
         returns=returns,
