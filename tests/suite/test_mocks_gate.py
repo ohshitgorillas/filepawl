@@ -157,9 +157,12 @@ def test_import_inside_a_function_makes_an_imported_name(repo: RepoFactory) -> N
 
 
 @pytest.mark.parametrize("form", REBINDS)
-def test_rebinding_on_a_local_object_passes(repo: RepoFactory, form: str) -> None:
-    source = _body(form.format(root="obj"), "local = Thing()", "local.f = 1")
-    assert _gate(repo, source + "    self.f = 1\n") == []
+def test_rebinding_on_a_local_object_passes_beside_an_imported_one(
+    repo: RepoFactory, form: str
+) -> None:
+    local = (form.format(root="obj"), "local = Thing()", "local.f = 1", "self.f = 1")
+    source = _body(*local, "m.table = {}")
+    assert _gate(repo, source) == [_finding(f"line {_line() + len(local)}")]
 
 
 MOCKS = [
@@ -194,8 +197,11 @@ def test_mock_with_a_spec_and_create_autospec_fail(
         "mocker.MagicMock(name='x')",
     ],
 )
-def test_mock_without_a_spec_passes(repo: RepoFactory, line: str) -> None:
-    assert _gate(repo, _body(line)) == []
+def test_mock_without_a_spec_passes_beside_one_with_a_spec(
+    repo: RepoFactory, line: str
+) -> None:
+    source = _body(line, "Mock(spec=Thing)")
+    assert _gate(repo, source) == [_finding(f"line {_line() + 1}")]
 
 
 PROCESS_STATE = [
@@ -217,8 +223,11 @@ PROCESS_HEAD = (
 
 
 @pytest.mark.parametrize("line", PROCESS_STATE)
-def test_setting_process_state_passes(repo: RepoFactory, line: str) -> None:
-    assert _gate(repo, _body(line, head=PROCESS_HEAD)) == []
+def test_setting_process_state_passes_beside_a_patch(
+    repo: RepoFactory, line: str
+) -> None:
+    source = _body(line, "m.table = {}", head=PROCESS_HEAD)
+    assert _gate(repo, source) == [_finding(f"line {_line(PROCESS_HEAD) + 1}")]
 
 
 @pytest.mark.parametrize(
