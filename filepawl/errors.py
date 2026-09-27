@@ -11,3 +11,7 @@ class ConfigError(FilepawlError):
 
 class StateError(FilepawlError):
     """Invalid or unparseable state file."""
+
+
+class JudgeError(FilepawlError):
+    """The judge cannot reach a verdict: no `claude`, or a call that failed twice."""
