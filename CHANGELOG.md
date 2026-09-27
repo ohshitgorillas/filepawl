@@ -11,9 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **The named-results gate fails a field of unnamed type.** A class field, or an attribute a method declares as `self.x: T`, typed `Any`, `object`, a union holding one, or a mapping the gate already refuses in a return annotation fails, with `ClassVar`, `Final`, `Annotated`, `InitVar`, `Required`, `NotRequired` and `ReadOnly` seen through.
 - **The returns gate fails a padded key.** A function whose dict-literal returns share one key set fails when a key is `None`, an empty string or an empty collection on some of them and a value on others. The judge treats padding by a route the gate does not read as a dodge.
 
+- **The reach gate fails a module that imports another module's private name.** A `from` import of a private name out of the repository's own code fails, relative imports and imports inside functions included; a private module, a dunder and a third-party name pass. `[tool.filepawl.reach]` takes `include`, `exempt` keyed `path::name` with a reason, and `enabled`, and the `filepawl init` stub carries the block.
+
 ### Changed
 
-- **`filepawl check` can report named-results findings on classes, and returns findings on functions of one shape, that passed before.**
+- **`filepawl check` can report named-results findings on classes, returns findings on functions of one shape, and reach findings, on trees that passed before.**
 
 ## 0.9.0 - 2026-09-26
 

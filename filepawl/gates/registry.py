@@ -26,6 +26,7 @@ _BUILTIN_GATES: tuple[tuple[str, str, str], ...] = (
     ("returns", "filepawl.gates.returns", "ReturnsGate"),
     ("named_results", "filepawl.gates.named_results", "NamedResultsGate"),
     ("handlers", "filepawl.gates.handlers", "HandlersGate"),
+    ("reach", "filepawl.gates.reach", "ReachGate"),
     ("absence", "filepawl.gates.suite.absence", "AbsenceGate"),
     ("private", "filepawl.gates.suite.private", "PrivateGate"),
     ("mocks", "filepawl.gates.suite.mocks", "MocksGate"),
@@ -87,6 +88,8 @@ def _is_enabled(name: str, policy: Policy) -> bool:
         return policy.named_results.enabled
     if name == "handlers":
         return policy.handlers.enabled
+    if name == "reach":
+        return policy.reach.enabled
     if name in SUITE_TABLES:
         enabled: bool = getattr(policy.suite, name).enabled
         return enabled

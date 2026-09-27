@@ -11,11 +11,13 @@ from filepawl.config_code import (
     HandlersPolicy,
     NamedResultsPolicy,
     NestingPolicy,
+    ReachPolicy,
     ReturnsPolicy,
     build_barrels,
     build_handlers,
     build_named_results,
     build_nesting,
+    build_reach,
     build_returns,
 )
 from filepawl.config_suite import SUITE_TABLES, SuitePolicies, build_suite
@@ -47,6 +49,7 @@ _RESERVED_TABLES = (
     "returns",
     "named_results",
     "handlers",
+    "reach",
     "judge",
     *SUITE_TABLES,
 )
@@ -101,6 +104,7 @@ class Policy:
     returns: ReturnsPolicy = field(default_factory=ReturnsPolicy)
     named_results: NamedResultsPolicy = field(default_factory=NamedResultsPolicy)
     handlers: HandlersPolicy = field(default_factory=HandlersPolicy)
+    reach: ReachPolicy = field(default_factory=ReachPolicy)
     judge: JudgePolicy = field(default_factory=JudgePolicy)
     suite: SuitePolicies = field(default_factory=SuitePolicies)
     packages: tuple[str, ...] | None = None
@@ -159,6 +163,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     returns = build_returns(raw.get("returns"))
     named_results = build_named_results(raw.get("named_results"))
     handlers = build_handlers(raw.get("handlers"))
+    reach = build_reach(raw.get("reach"))
     judge = _build_judge(raw.get("judge"))
     suite = build_suite(raw)
     raw_packages = raw.get("packages")
@@ -180,6 +185,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         returns=returns,
         named_results=named_results,
         handlers=handlers,
+        reach=reach,
         judge=judge,
         suite=suite,
         packages=packages,

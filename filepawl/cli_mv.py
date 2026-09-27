@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-from filepawl.cli import _relative
+from filepawl.cli import relative_paths
 from filepawl.config import LanguagePolicy, Policy, load_policy
 from filepawl.errors import ConfigError
 from filepawl.movers import registry
@@ -26,7 +26,7 @@ def run_mv(old_arg: str, new_arg: str, stream: TextIO | None = None) -> int:
     out = sys.stdout if stream is None else stream
     root = find_root(Path.cwd())
     policy = load_policy(root)
-    old_rel, new_rel = _relative(root, [old_arg, new_arg])
+    old_rel, new_rel = relative_paths(root, [old_arg, new_arg])
 
     language, language_policy = _language_of(policy, old_rel)
     mover = _mover_for(language, language_policy)

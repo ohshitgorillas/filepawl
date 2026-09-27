@@ -129,7 +129,7 @@ def _accept(paths: list[str], reason: str | None) -> int:
     for gate in run.gates:
         state = gate.accept(run.tree, run.policy, state)
     if reason is not None:
-        state = _with_reason(state, _relative(run.root, paths)[0], reason)
+        state = _with_reason(state, relative_paths(run.root, paths)[0], reason)
     if state != run.state:
         write_state(run.root, state)
 
@@ -161,7 +161,7 @@ def _prepare(paths: list[str]) -> _Run:
     root = find_root(Path.cwd())
     policy = load_policy(root)
     _check_movers(policy)
-    selected = _relative(root, paths) if paths else None
+    selected = relative_paths(root, paths) if paths else None
     if selected is not None and "." in selected:
         # A path naming the root itself narrows nothing.
         selected = None
@@ -174,7 +174,7 @@ def _prepare(paths: list[str]) -> _Run:
     )
 
 
-def _relative(root: Path, paths: list[str]) -> list[str]:
+def relative_paths(root: Path, paths: list[str]) -> list[str]:
     """Normalize argv paths, which are relative to the cwd, against `root`."""
     resolved = root.resolve()
     out: list[str] = []

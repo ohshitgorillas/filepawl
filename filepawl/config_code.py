@@ -24,6 +24,7 @@ _NESTING_KEYS = ("include", "max_depth", "exempt", "enabled")
 _RETURNS_KEYS = ("include", "exempt", "enabled")
 _NAMED_RESULTS_KEYS = ("include", "exclude", "enabled")
 _HANDLERS_KEYS = ("include", "exempt", "enabled")
+_REACH_KEYS = ("include", "exempt", "enabled")
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,13 @@ class NamedResultsPolicy:
 
 @dataclass(frozen=True)
 class HandlersPolicy:
+    include: tuple[str, ...] = ("**/*.py",)
+    exempt: dict[str, str] = field(default_factory=dict)
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
+class ReachPolicy:
     include: tuple[str, ...] = ("**/*.py",)
     exempt: dict[str, str] = field(default_factory=dict)
     enabled: bool = True
@@ -137,5 +145,19 @@ def build_handlers(table: object) -> HandlersPolicy:
     return HandlersPolicy(
         include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
         exempt=exempt_table(table.get("exempt"), "[tool.filepawl.handlers.exempt]"),
+        enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
+    )
+
+
+def build_reach(table: object) -> ReachPolicy:
+    if table is None:
+        return ReachPolicy()
+    where = "[tool.filepawl.reach]"
+    if not isinstance(table, dict):
+        raise ConfigError(f"{where} must be a table")
+    check_keys(table, _REACH_KEYS, where)
+    return ReachPolicy(
+        include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
+        exempt=exempt_table(table.get("exempt"), "[tool.filepawl.reach.exempt]"),
         enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
     )

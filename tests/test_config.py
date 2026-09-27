@@ -20,6 +20,7 @@ from filepawl.config_code import (
     HandlersPolicy,
     NamedResultsPolicy,
     NestingPolicy,
+    ReachPolicy,
     ReturnsPolicy,
 )
 from filepawl.errors import ConfigError
@@ -230,6 +231,44 @@ class TestHandlersPolicy:
     def test_stub_carries_the_handlers_block(self) -> None:
         assert "# [tool.filepawl.handlers]" in DEFAULT_POLICY_STUB
         assert "# [tool.filepawl.handlers.exempt]" in DEFAULT_POLICY_STUB
+
+
+class TestReachPolicy:
+    def test_defaults(self) -> None:
+        assert default_policy().reach == ReachPolicy(
+            include=("**/*.py",), exempt={}, enabled=True
+        )
+
+    def test_table_is_read(self, tmp_path: Path) -> None:
+        write(
+            tmp_path,
+            "[tool.filepawl.reach]\n"
+            'include = ["pkg/**/*.py"]\n'
+            "enabled = false\n"
+            "[tool.filepawl.reach.exempt]\n"
+            '"pkg/a.py::_twin" = "shared with its twin module"\n',
+        )
+        policy = load_policy(tmp_path)
+        assert policy.reach == ReachPolicy(
+            include=("pkg/**/*.py",),
+            exempt={"pkg/a.py::_twin": "shared with its twin module"},
+            enabled=False,
+        )
+        assert "reach" not in policy.gate_tables
+
+    def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
+        write(tmp_path, "[tool.filepawl.reach]\nallow_none = true\n")
+        with pytest.raises(ConfigError, match="unknown key 'allow_none'"):
+            load_policy(tmp_path)
+
+    def test_exemption_reason_must_be_a_string(self, tmp_path: Path) -> None:
+        write(tmp_path, '[tool.filepawl.reach.exempt]\n"a.py::_x" = 1\n')
+        with pytest.raises(ConfigError, match="must be a string reason"):
+            load_policy(tmp_path)
+
+    def test_stub_carries_the_reach_block(self) -> None:
+        assert "# [tool.filepawl.reach]" in DEFAULT_POLICY_STUB
+        assert "# [tool.filepawl.reach.exempt]" in DEFAULT_POLICY_STUB
 
 
 class TestJudgePolicy:

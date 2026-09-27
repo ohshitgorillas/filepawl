@@ -66,6 +66,13 @@ DEFAULT_POLICY_STUB = (
             '# "path::qualified.name" = reason. Human-edited. A function that '
             "returns from a handler on purpose.",
             "",
+            "[tool.filepawl.reach]",
+            'include = ["**/*.py"]',
+            "",
+            "[tool.filepawl.reach.exempt]",
+            '# "path::name" = reason. Human-edited. A private name a file imports '
+            "on purpose.",
+            "",
             "[tool.filepawl.absence]",
             'include = ["**/*.py"]',
             "",
