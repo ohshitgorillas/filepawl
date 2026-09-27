@@ -63,6 +63,7 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Test-suite gates | built-in, enabled by default, Python only (`ast`): private, mocks, environment, snapshots, test names, existence, fakes; each reads test paths only, whole tree every run |
 | Test-suite site gates | private, mocks, environment, snapshots and fakes report each offending site under its innermost function, and exempt per function, human-edited, with a reason; no command writes them, and a stale one fails |
 | Test-suite test gates | test names and existence judge each test as §6.11 does, and exempt per test, human-edited, with a reason; no command writes them, and a stale one fails |
+| Mocks targets | none; every patch fails whatever it replaces, own code or third-party; setting process state through `chdir`, `setenv`, `delenv`, `syspath_prepend` and `sys.modules` or `os.environ` items is not a patch |
 | Test-suite heuristics | snapshots fails a literal over `max_items` leaves, default 8; test names fails under `min_words` words, default 3; both are policy |
 | Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload; it denies an edit that grows a file to over its cap, and warns on any other edit that leaves the file over the watch line or a cap |
 | Plugin | a Claude Code marketplace in this repository with one plugin under `plugin/`; its hook runs the consumer's installed `filepawl`, not a bundled copy |
@@ -203,7 +204,7 @@ include = ["**/*.py"]
 include = ["**/*.py"]
 
 [tool.filepawl.mocks.exempt]
-# "path::qualified.name" = reason. Human-edited. A function that patches own code on purpose.
+# "path::qualified.name" = reason. Human-edited. A function that patches on purpose.
 
 [tool.filepawl.environment]
 include = ["**/*.py"]
@@ -477,18 +478,19 @@ A failing unit is reported as `path::unit: reaches _a, _b at line N — test thr
 
 ### 6.14 Mocks gate
 
-A test that replaces the repository's own function with a stub tests the stub. The code under test is exercised against a collaborator that behaves as the test writer believed, not as it does. The fix is a fake at the wire: a fake server speaking the real protocol, a fake file tree, a fake subprocess the test writes.
+A test that replaces a function, an attribute, a class or a mapping with a stand-in tests the stand-in. The code under test runs against a collaborator that behaves as the test writer believed, not as it does. The fix is a fake at the wire: a fake server speaking the real protocol, a fake file tree, a fake subprocess the test writes, or the value handed to the code through an argument.
 
-A site gate. A site is:
+A site gate that does not look at the target: what a patch replaces, own code or third-party, does not matter. An imported name is a name that an import statement anywhere in the checked file binds, a relative import included. A site is:
 
-- a call to `patch`, or to an attribute chain whose last name is `patch`, whose first argument is an own dotted string;
-- a call to `object`, `dict` or `multiple` on such a chain, as in `patch.object` or `mocker.patch.dict`, whose first argument is own-rooted or an own dotted string;
-- a call to an attribute named `setattr`, `delattr`, `setitem` or `delitem`, the `monkeypatch` forms, whose first argument is own-rooted, or for `setattr` and `delattr` an own dotted string;
-- a call to the builtin `setattr` or `delattr` whose first argument is own-rooted;
-- an assignment or `del` whose target is an attribute chain rooted at an own binding, as in `engine.fetch = fake_fetch`;
-- a call to `Mock`, `MagicMock`, `AsyncMock`, `NonCallableMock` or `NonCallableMagicMock`, bare or as the last name of a chain, with a `spec` or `spec_set` keyword that is own-rooted, and a call to `create_autospec` whose first argument is own-rooted.
+- a call to `patch`, or to an attribute chain whose last name is `patch`, as in `mock.patch` and `mocker.patch`;
+- a call to `object`, `dict` or `multiple` on such a chain, as in `patch.object` or `mocker.patch.dict`;
+- a call to an attribute named `setattr` or `delattr`, the `monkeypatch` forms, in their string and object forms;
+- a call to an attribute named `setitem` or `delitem` whose first argument's dotted name, as §6.12 resolves it, is not `sys.modules` or `os.environ`;
+- a call to the builtin `setattr` or `delattr` whose first argument is an imported name or an attribute chain rooted at one;
+- an assignment, augmented assignment or `del` whose target is an attribute chain rooted at an imported name, as in `engine.fetch = fake_fetch` or `sys.stdin = buffer`;
+- a call to `Mock`, `MagicMock`, `AsyncMock`, `NonCallableMock` or `NonCallableMagicMock`, bare or as the last name of a chain, with a `spec` or `spec_set` keyword, and any call to `create_autospec`.
 
-Patching a module table or import path to load the unit under test, as in `monkeypatch.setitem(sys.modules, ...)`, is not a site: its first argument is not own code. A failing unit is reported as `path::unit: patches own code at line N — fake at the wire, never over the code`, and an exemption that excuses nothing as `patches no own code, so it needs no exemption`.
+Setting the process state the unit under test runs in is not a site: `monkeypatch.chdir`, `setenv`, `delenv` and `syspath_prepend`, and `setitem` and `delitem` on `sys.modules` or `os.environ`. A failing unit is reported as `path::unit: patches at line N — fake at the wire, never a patch`, and an exemption that excuses nothing as `patches nothing, so it needs no exemption`.
 
 ### 6.15 Environment gate
 
@@ -612,7 +614,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Absence gate: each absent value, as either side of `==` and `is`, fails alone; `not <expr>` and `len(...) == 0` fail; a tuple of absent values fails and a tuple holding one present value passes; `True`, a non-empty display and a call with arguments are present values; `!=`, `is not`, `in` and a bare expression pass; a test with one present assertion among absent ones passes; `pytest.raises`, `pytest.warns` and an `assert*` method call count as asserting something else; a test with no `assert` passes; an `assert` in a nested `def` is not the test's; `Test` class methods are named by qualified name and methods of other classes are not tests; non-test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
 - Own code: derived from the tree's non-test Python files, root modules and `src/` layout included; `packages` replaces the derived set, and `packages = []` leaves none.
 - Private gate: a private attribute read and write, a `getattr` family call bare and on a chain, `patch.object`, a private segment in a `patch` or `setattr` dotted string, a private module segment and a private imported name each fail; `self` and `cls` receivers, dunders, named-tuple members and names the file defines pass; a third-party private import passes; sites at module level report under `<module>`; several sites list their names and lines; exemption and each audit message.
-- Mocks gate: each patch form with an own target fails and with a third-party target passes; `monkeypatch.setattr` in its string and object forms; `sys.modules` patching passes; attribute assignment and `del` on an own binding fail; `Mock` with an own `spec` and `create_autospec` of own code fail; a relative import binds no own name; exemption and each audit message.
+- Mocks gate: each patch form fails with an own target and with a third-party target; `monkeypatch.setattr` and `delattr` fail in their string and object forms; the builtin `setattr` and `delattr`, attribute assignment, augmented assignment and `del` fail on an imported name, a relative import included, and pass on a local object; `Mock` with any `spec` or `spec_set` and `create_autospec` fail, and `Mock` without one passes; `chdir`, `setenv`, `delenv` and `syspath_prepend` pass, `setitem` and `delitem` on `sys.modules` and `os.environ` pass, through `import` and `from` imports, and on another mapping fail; exemption and each audit message.
 - Environment gate: each named call and read fails, reached through `import x`, `from x import y` and an alias; `os.environ` inside `setitem`, `delitem` and `patch.dict` passes; `astimezone` with an argument passes; each port form fails at a fixed port and passes at 0; exemption and each audit message.
 - Snapshots gate: a display at `max_items` leaves passes and one over fails; dict keys do not count; a golden read through `__file__` directly, through a module-level name and through a local name fails; a read of a temporary file passes; `snapshot` fails; `!=` is not read; exemption and each audit message.
 - Test-names gate: fewer than `min_words` words fails; a trailing number fails; a class name's words count for a method; exemption and each audit message.

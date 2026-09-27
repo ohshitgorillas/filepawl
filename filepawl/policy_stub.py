@@ -85,7 +85,7 @@ DEFAULT_POLICY_STUB = (
             "",
             "[tool.filepawl.mocks.exempt]",
             '# "path::qualified.name" = reason. Human-edited. A function that '
-            "patches own code on purpose.",
+            "patches on purpose.",
             "",
             "[tool.filepawl.python]",
             'include = ["**/*.py"]',

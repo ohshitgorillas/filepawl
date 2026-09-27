@@ -185,6 +185,7 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`docs: test-suite gates spec`**: `docs/design.md` §1, §2, §3, §4, §6.3, §6.12 to §6.19, §9, §10; `docs/plan.md`.
 - **`chore: move the absence gate under gates/suite`**: `filepawl/gates/suite/`, `filepawl/config_suite.py` taking the absence policy out of `filepawl/config.py`, `tests/suite/`; no behavior changes.
 - **`feat: own code`**: the `packages` key in `filepawl/config.py` and the derivation, own bindings and dotted names in `filepawl/gates/suite/common.py`; tests in `tests/suite/test_common.py`.
+- **`docs: widen the mocks gate`**: `docs/design.md` §2, §4, §6.14, §9, the gate failing every patch whatever its target; `filepawl/policy_stub.py`; `docs/plan.md`.
 - Per gate, in the order private, mocks, environment, snapshots, test names, existence, fakes: **`feat: <gate> policy`** in `filepawl/config_suite.py`, registry and stub; **`test: ...`** rewriting any test in this tree the gate fails, where one does, with no exemption; **`feat: <gate> gate`** in `filepawl/gates/suite/<gate>.py`, tests in `tests/suite/`, `filepawl check` green on this tree.
 - **`docs: test-suite gates in README and changelog`**: `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
 
