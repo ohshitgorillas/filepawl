@@ -414,48 +414,39 @@ def test_builtin_movers_are_registered_by_name() -> None:
     assert movers["command"].__name__ == "CommandMover"
 
 
-class _FakeEntryPoint:
-    def __init__(self, name: str, loader: Callable[[], object]) -> None:
-        self.name = name
-        self._loader = loader
+def _write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
 
-    def load(self) -> object:
-        return self._loader()
+
+def _install_mover(
+    dist_dir: Path, monkeypatch: pytest.MonkeyPatch, module: str, source: str
+) -> None:
+    """Install a real distribution whose `filepawl.movers` entry point is
+    `<module>:make`, found through importlib.metadata."""
+    _write(dist_dir / module / "__init__.py", source)
+    info = dist_dir / f"{module}-0.1.dist-info"
+    _write(info / "METADATA", f"Metadata-Version: 2.1\nName: {module}\nVersion: 0.1\n")
+    _write(info / "entry_points.txt", f"[filepawl.movers]\n{module} = {module}:make\n")
+    monkeypatch.syspath_prepend(str(dist_dir))
+    importlib.invalidate_caches()
 
 
 def test_entry_point_load_failure_raises_config_error(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def _boom() -> object:
-        raise ImportError("no such module")
-
-    monkeypatch.setattr(
-        registry, "entry_points", lambda group: [_FakeEntryPoint("bad", _boom)]
-    )
-
-    with pytest.raises(ConfigError, match="bad"):
+    _install_mover(tmp_path, monkeypatch, "fpmover_broken", "import no_such_module\n")
+    with pytest.raises(ConfigError, match="fpmover_broken"):
         registry.discover_movers()
 
 
 def test_entry_point_missing_mover_attrs_raises_config_error(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    class _NotAMover:
-        pass
-
-    monkeypatch.setattr(
-        registry,
-        "entry_points",
-        lambda group: [_FakeEntryPoint("incomplete", lambda: _NotAMover)],
-    )
-
-    with pytest.raises(ConfigError, match="incomplete"):
+    source = "class NotAMover:\n    pass\nmake = NotAMover\n"
+    _install_mover(tmp_path, monkeypatch, "fpmover_incomplete", source)
+    with pytest.raises(ConfigError, match="fpmover_incomplete"):
         registry.discover_movers()
-
-
-def _write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
 
 
 def test_entry_point_mover_discovered_from_real_distribution(
@@ -491,33 +482,34 @@ def test_entry_point_mover_discovered_from_real_distribution(
 
 def test_a_third_party_mover_name_is_selected_for_the_move(
     repo: Repo,
+    tmp_path_factory: pytest.TempPathFactory,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    calls: list[tuple[str, str]] = []
-
-    class _RecordingMover:
-        def move(self, old: Path, new: Path, root: Path) -> list[Path]:
-            calls.append((old.name, new.name))
-            old.rename(new)
-            return [old, new]
-
-        def find_stale_refs(self, old_dotted: str, root: Path) -> list[str]:
-            return []
-
+    source = (
+        "class RecordingMover:\n"
+        "    def move(self, old, new, root):\n"
+        "        (root / 'moved-by-recording').write_text(f'{old.name} {new.name}')\n"
+        "        old.rename(new)\n"
+        "        return [old, new]\n"
+        "    def find_stale_refs(self, old_dotted, root):\n"
+        "        return []\n"
+        "make = RecordingMover\n"
+    )
+    _install_mover(tmp_path_factory.mktemp("dist"), monkeypatch, "fpmover_rec", source)
     root = repo(
         {
-            "pyproject.toml": policy(mover="recording"),
+            "pyproject.toml": policy(mover="fpmover_rec"),
             "pkg/__init__.py": "",
             "pkg/a.py": "X = 1\n",
         }
     )
     monkeypatch.chdir(root)
-    monkeypatch.setattr(
-        registry, "discover_movers", lambda: {"recording": _RecordingMover}
+
+    code = main(["mv", "pkg/a.py", "pkg/b.py"])
+
+    assert (code, (root / "moved-by-recording").read_text(encoding="utf-8")) == (
+        0,
+        "a.py b.py",
     )
-
-    assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 0
-
-    assert calls == [("a.py", "b.py")]
     capsys.readouterr()

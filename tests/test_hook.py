@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from filepawl.cli import main
+from filepawl.hook import run_hook as _run_hook
 from filepawl.state import STATE_FILE
+
+FILEPAWL = Path(__file__).resolve().parent.parent / ".venv" / "bin" / "filepawl"
 
 Repo = Callable[[dict[str, str | int]], Path]
 
@@ -61,12 +64,12 @@ def hook_output(
     capsys: pytest.CaptureFixture[str],
 ) -> dict[str, object] | None:
     text = payload if isinstance(payload, str) else json.dumps(payload)
-    monkeypatch.setattr("sys.stdin", io.StringIO(text))
-    assert main(["hook"]) == 0
-    out = capsys.readouterr().out
-    if out == "":
+    out = io.StringIO()
+    assert _run_hook(io.StringIO(text), out) == 0
+    output = out.getvalue()
+    if output == "":
         return None
-    specific = json.loads(out)["hookSpecificOutput"]
+    specific = json.loads(output)["hookSpecificOutput"]
     assert isinstance(specific, dict)
     assert specific["hookEventName"] == "PreToolUse"
     return specific
@@ -491,3 +494,26 @@ def test_broken_state_is_silent(
     reason = run_hook_denied(write(root, "a.py", lines(CAP + 5)), monkeypatch, capsys)
     assert broken is None
     assert reason.startswith(f"a.py: this edit takes it 1 → {CAP + 5} lines")
+
+
+# --- subprocess ------------------------------------------------------------
+
+
+def test_installed_hook_runs_as_a_subprocess(repo: Repo) -> None:
+    root = repo({"a.py": WATCH})
+    payload = edit(root, "a.py", "line 1\n", lines(2))
+    result = subprocess.run(
+        [str(FILEPAWL), "hook"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    specific = json.loads(result.stdout)["hookSpecificOutput"]
+    notice = strip_prefix(specific["additionalContext"])
+    assert notice == (
+        f"a.py: goes {WATCH} → {WATCH + 1} lines, over watch line {WATCH}; it "
+        "enters the length ratchet on the next `filepawl accept` and may only "
+        f"shrink after that. {DELEGATE}"
+    )
