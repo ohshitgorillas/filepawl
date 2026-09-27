@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from filepawl.config import Policy, default_policy
-from filepawl.config_suite import AbsencePolicy, SuitePolicies
+from filepawl.config_suite import SuiteGatePolicy, SuitePolicies
 from filepawl.gates import registry
 from filepawl.gates.base import Finding
 from filepawl.gates.suite.absence import AbsenceGate
@@ -77,7 +77,7 @@ def _stale(key: str, message: str) -> Finding:
 
 
 def _policy(**absence: object) -> Policy:
-    suite = SuitePolicies(absence=AbsencePolicy(**absence))  # type: ignore[arg-type]
+    suite = SuitePolicies(absence=SuiteGatePolicy(**absence))  # type: ignore[arg-type]
     return dataclasses.replace(default_policy(), suite=suite)
 
 

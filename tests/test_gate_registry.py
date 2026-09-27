@@ -121,25 +121,26 @@ def test_handlers_disabled_via_policy_handlers_enabled(
     assert (enabled, disabled) == (["handlers"], [])
 
 
-def test_absence_disabled_via_policy_absence_enabled(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("gate", ["absence", "private"])
+def test_suite_gate_disabled_via_its_policy_table(
+    gate: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_fake_module(monkeypatch, "fake_absence_mod", "FakeAbsence", "absence")
+    _install_fake_module(monkeypatch, f"fake_{gate}_mod", "FakeSuiteGate", gate)
     monkeypatch.setattr(
         registry,
         "_BUILTIN_GATES",
-        (("absence", "fake_absence_mod", "FakeAbsence"),),
+        ((gate, f"fake_{gate}_mod", "FakeSuiteGate"),),
     )
     monkeypatch.setattr(registry, "entry_points", lambda group: [])
     suite = default_policy().suite
-    absence = dataclasses.replace(suite.absence, enabled=False)
+    off = dataclasses.replace(getattr(suite, gate), enabled=False)
     policy = dataclasses.replace(
-        default_policy(), suite=dataclasses.replace(suite, absence=absence)
+        default_policy(), suite=dataclasses.replace(suite, **{gate: off})
     )
 
     enabled = [g.name for g in registry.discover_gates(default_policy())]
     disabled = [g.name for g in registry.discover_gates(policy)]
-    assert (enabled, disabled) == (["absence"], [])
+    assert (enabled, disabled) == ([gate], [])
 
 
 class _FakeEntryPoint:

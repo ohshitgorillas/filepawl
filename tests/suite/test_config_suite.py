@@ -7,48 +7,63 @@ from pathlib import Path
 import pytest
 
 from filepawl.config import default_policy, load_policy
-from filepawl.config_suite import AbsencePolicy
+from filepawl.config_suite import SuiteGatePolicy
 from filepawl.errors import ConfigError
 from filepawl.policy_stub import DEFAULT_POLICY_STUB
+
+#: Gates whose table holds only `include`, `exempt` and `enabled`.
+PLAIN_GATES = ["absence", "private"]
 
 
 def write(root: Path, text: str) -> None:
     (root / "pyproject.toml").write_text(text, encoding="utf-8")
 
 
-class TestAbsencePolicy:
-    def test_defaults(self) -> None:
-        assert default_policy().suite.absence == AbsencePolicy(
-            include=("**/*.py",), exempt={}, enabled=True
-        )
+@pytest.mark.parametrize("gate", PLAIN_GATES)
+def test_plain_gate_defaults_check_every_python_file(gate: str) -> None:
+    assert getattr(default_policy().suite, gate) == SuiteGatePolicy(
+        include=("**/*.py",), exempt={}, enabled=True
+    )
 
-    def test_table_is_read(self, tmp_path: Path) -> None:
-        write(
-            tmp_path,
-            "[tool.filepawl.absence]\n"
-            'include = ["tests/unit/**/*.py"]\n'
-            "enabled = false\n"
-            "[tool.filepawl.absence.exempt]\n"
-            '"tests/test_a.py::test_quiet" = "silence is the contract"\n',
-        )
-        policy = load_policy(tmp_path)
-        assert policy.suite.absence == AbsencePolicy(
+
+@pytest.mark.parametrize("gate", PLAIN_GATES)
+def test_plain_gate_table_is_read(gate: str, tmp_path: Path) -> None:
+    write(
+        tmp_path,
+        f"[tool.filepawl.{gate}]\n"
+        'include = ["tests/unit/**/*.py"]\n'
+        "enabled = false\n"
+        f"[tool.filepawl.{gate}.exempt]\n"
+        '"tests/test_a.py::test_quiet" = "the contract"\n',
+    )
+    policy = load_policy(tmp_path)
+    assert (getattr(policy.suite, gate), gate in policy.gate_tables) == (
+        SuiteGatePolicy(
             include=("tests/unit/**/*.py",),
-            exempt={"tests/test_a.py::test_quiet": "silence is the contract"},
+            exempt={"tests/test_a.py::test_quiet": "the contract"},
             enabled=False,
-        )
-        assert "absence" not in policy.gate_tables
+        ),
+        False,
+    )
 
-    def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
-        write(tmp_path, "[tool.filepawl.absence]\nallow_none = true\n")
-        with pytest.raises(ConfigError, match="unknown key 'allow_none'"):
-            load_policy(tmp_path)
 
-    def test_exemption_reason_must_be_a_string(self, tmp_path: Path) -> None:
-        write(tmp_path, '[tool.filepawl.absence.exempt]\n"a.py::test_f" = 1\n')
-        with pytest.raises(ConfigError, match="must be a string reason"):
-            load_policy(tmp_path)
+@pytest.mark.parametrize("gate", PLAIN_GATES)
+def test_plain_gate_unknown_key_is_config_error(gate: str, tmp_path: Path) -> None:
+    write(tmp_path, f"[tool.filepawl.{gate}]\nallow_none = true\n")
+    with pytest.raises(ConfigError, match="unknown key 'allow_none'"):
+        load_policy(tmp_path)
 
-    def test_stub_carries_the_absence_block(self) -> None:
-        assert "# [tool.filepawl.absence]" in DEFAULT_POLICY_STUB
-        assert "# [tool.filepawl.absence.exempt]" in DEFAULT_POLICY_STUB
+
+@pytest.mark.parametrize("gate", PLAIN_GATES)
+def test_plain_gate_exemption_reason_must_be_a_string(
+    gate: str, tmp_path: Path
+) -> None:
+    write(tmp_path, f'[tool.filepawl.{gate}.exempt]\n"a.py::test_f" = 1\n')
+    with pytest.raises(ConfigError, match="must be a string reason"):
+        load_policy(tmp_path)
+
+
+@pytest.mark.parametrize("gate", PLAIN_GATES)
+def test_stub_carries_the_gate_and_exempt_blocks(gate: str) -> None:
+    blocks = (f"# [tool.filepawl.{gate}]\n", f"# [tool.filepawl.{gate}.exempt]\n")
+    assert [block in DEFAULT_POLICY_STUB for block in blocks] == [True, True]
