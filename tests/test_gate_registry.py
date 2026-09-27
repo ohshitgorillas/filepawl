@@ -22,6 +22,7 @@ BUILTINS = [
     "named_results",
     "handlers",
     "absence",
+    "private",
 ]
 
 
