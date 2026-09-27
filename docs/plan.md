@@ -210,6 +210,12 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`feat: named-results gate fails fields of unnamed type`**: a class field or method-declared attribute typed `Any`, `object`, a union holding one, or a loose mapping fails, qualifiers seen through, in `filepawl/gates/named_results.py` and §1, §2, §3, §6.9 and §9, tested in `tests/test_named_results_gate.py`; this tree's `Policy.gate_tables` names its value type; `README.md` and the `[Unreleased]` section of `CHANGELOG.md` describe the rule.
 - **`feat: returns gate fails padded shapes`**: a key whose value is an empty constant on some shaped returns of one shape and not on others fails, in `filepawl/gates/returns.py` and §2, §6.8 and §9, tested in `tests/test_returns_gate.py`; `README.md` and the `[Unreleased]` section of `CHANGELOG.md` describe the rule.
 
+### Reach gate (spec §6.21)
+
+- **`docs: reach gate spec`**: `docs/design.md` §1, §2, §3, §4, §6.3, §6.21, §9, §10; `docs/plan.md`.
+- **`chore: move the code-gate policies to config_code`**: `filepawl/config_code.py` takes the barrels, nesting, returns, named-results and handlers policies and their builders out of `filepawl/config.py`; tests import them from there; no behavior changes.
+- **`feat: reach gate`**: `ReachPolicy` in `filepawl/config_code.py` (`enabled`, `include`, `exempt`), `reach` reserved, registry `_is_enabled` branch, `filepawl/policy_stub.py`; `filepawl/gates/reach.py`, after the handlers gate in `_BUILTIN_GATES`; tests in `tests/test_reach_gate.py`, `tests/test_config.py` and `tests/test_gate_registry.py`; `README.md` and the `[Unreleased]` section of `CHANGELOG.md` describe the gate.
+
 ## Verification (orchestrator, end)
 
 ```

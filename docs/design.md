@@ -14,6 +14,7 @@ filepawl extracts the engine into one installable package with:
 - a fifth gate against functions whose returned dict literals disagree on their keys;
 - a sixth gate against functions that return a mapping without naming its shape, and classes that declare a field of unnamed type;
 - a seventh gate against functions that return from an exception handler;
+- a gate against modules that import another module's private name;
 - an eighth gate against tests that assert only an absent value;
 - eight test-suite gates against tests that reach private names, patch or mock the repository's own code, read the host environment, compare against a golden dump, carry a name that states no behavior, assert only that something exists, or run on the wall clock, and against fakes that compute their replies with the repository's own code;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
@@ -57,6 +58,9 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Handlers file set | tree files matched by the gate's own `include`, minus test paths; whole tree every run |
 | Handlers values | `return <expr>` is a value return, `return None` included; a bare `return` fails only in a function that has a value return |
 | Handlers exemptions | live in policy, per function, human-edited, with a reason; no command writes them, and a stale one fails |
+| Reach gate | built-in, enabled by default, Python only (`ast`); fails a `from` import of a private name out of own code, where the name is not itself a module |
+| Reach file set | tree files matched by the gate's own `include`, minus test paths; whole tree every run |
+| Reach exemptions | live in policy, per importing file and name, human-edited, with a reason; no command writes them, and a stale one fails |
 | Absence gate | built-in, enabled by default, Python only (`ast`); fails a test whose every `assert` compares against an absent value and which asserts nothing else |
 | Absence file set | tree files matched by the gate's own `include` and by a `tests` glob; test paths only; whole tree every run |
 | Absence pairing | none; a test carries its own contrast, and a sibling test asserting a present value does not excuse it |
@@ -87,6 +91,7 @@ filepawl/
   hook.py           # the hook command: edit-time notice (§7.1)
   config.py         # load [tool.filepawl], merge defaults, validate
   config_values.py  # typed value checks shared by every policy table
+  config_code.py    # policy tables of the code gates
   config_suite.py   # policy tables of the test-suite gates
   policy_stub.py    # the commented default policy block `init` writes
   state.py          # read/write .filepawl.toml
@@ -101,6 +106,7 @@ filepawl/
     returns.py      # key sets of dict-literal returns per function
     named_results.py  # unnamed shapes in return annotations, aliases and fields
     handlers.py     # returns from exception handlers per function
+    reach.py        # private names imported from another own module
     registry.py     # built-ins + entry points
     suite/
       __init__.py
@@ -201,6 +207,12 @@ include = ["**/*.py"]
 
 [tool.filepawl.handlers.exempt]
 # "path::qualified.name" = reason. Human-edited. A function that returns from a handler on purpose.
+
+[tool.filepawl.reach]
+include = ["**/*.py"]
+
+[tool.filepawl.reach.exempt]
+# "path::name" = reason. Human-edited. A private name a file imports on purpose.
 
 [tool.filepawl.absence]
 include = ["**/*.py"]
@@ -328,7 +340,7 @@ For each directory that contains at least one include-matched file: count the in
 
 ### 6.3 Scope of a run
 
-`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate, the returns gate, the named-results gate, the handlers gate and the test-suite gates always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
+`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate, the returns gate, the named-results gate, the handlers gate, the reach gate and the test-suite gates always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
 
 `.pre-commit-hooks.yaml` declares the hook with `pass_filenames: false` and `always_run: true`: one hook covers every language, where HQPTuner today needs a `types: [python]` hook and a `types: [javascript]` hook and checks CSS only from `make`. The whole-tree run is one `git ls-files` plus a line count per file, so nothing is saved by narrowing it.
 
@@ -594,6 +606,23 @@ A site gate. Small is a number above 0 and under 0.5 seconds: a ceiling a test n
 
 `names` defaults to `timeout`, `interval` and `delay`; a repository whose code paces on another name adds it. A failing unit is reported as `path::unit: runs on the wall clock at line N — pace it through a clock the test advances`, and an exemption that excuses nothing as `runs on no wall clock, so it needs no exemption`.
 
+### 6.21 Reach gate
+
+A split cut along a seam leaves two modules that talk through public names. A split cut along no seam leaves each half reaching into the other's private names, because the code on either side still needs what the other side hides. The length gate reads both as the same completed split. The import of a private name is where the difference shows, and it is checkable.
+
+Checked files: tree files matched by `[tool.filepawl.reach] include`, minus test paths, since the private gate (§6.13) judges tests. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6.
+
+A private name starts with `_` and is not a dunder. A reach is a name in a `from` import, anywhere in the module and at any scope, that is private, where the module it is imported from is own code and the name is not itself a module. An import with a level is resolved against the importing file's package and is always own code; an absolute import is own code when its first segment is an own name (§6.12). The name is a module when the source module joined to it by `.` is the import name of a Python file in the tree, where a path's import name drops a leading `src/`, the `.py` suffix and a trailing `__init__`. `import a._b` names a module and is not read; `from a import *` imports no name.
+
+Reaches are grouped by importing file and name. Finding: `path::name: imports private name from source at line N — make it public where it lives, or move it to its one user`, with `lines N, M` listing every import of that name in the file in line order, and `source` the absolute module of the first.
+
+Exemptions live in `[tool.filepawl.reach.exempt]`, keyed `path::name`, with a reason. The audit covers every entry on every run and reports each finding under path `pyproject.toml`:
+
+- an entry whose path is not a checked file: `names no file`;
+- an entry naming a name the file does not reach: `imports no such private name, so it needs no exemption`.
+
+No reach finding is fixable by `accept`, and `accept` leaves state unchanged.
+
 ## 7. CLI
 
 ```
@@ -684,6 +713,7 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Returns gate: one shape passes; two shapes fail and are listed in first-appearance order; key order and repeats do not count; `{}` is a shape; spread and non-string-constant keys are skipped; non-dict and bare returns are ignored; a key empty on one return and set on another fails under each empty form, and `False`, `0`, a non-empty display, a call with arguments and a name do not pad; a key empty on every return, a single return and a function of several shapes report no padding; padded keys are listed sorted; a nested `def`'s returns are its own; methods are named by qualified name; test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
 - Named-results gate: each mapping name, bare and subscripted, with `Any` and with `object`, bare and attribute-qualified; a precise value type passes; a loose type inside a value-type union fails and inside a value-type `list` passes; a loose mapping inside `|`, `Optional`, `list`, `tuple`, `Callable`, a nested mapping and a quoted annotation fails; `Literal` items are not read; async functions, nested functions and methods named by qualified name; each alias form, including under `if TYPE_CHECKING:`; a call or string assignment is not an alias; a class-level or function-level alias is not checked; a loose class field fails under each qualifier and at any depth of classes and blocks, an annotated `self.x` in a method fails, and a precise field type, a module-level annotation and a local variable pass; `exclude`, test paths and files outside `include` are not checked; a file that does not parse is skipped.
 - Handlers gate: `return <expr>` and `return None` in `except` and `except*` fail; a bare `return` in a handler passes alone and fails beside a value return, including a `return None`; a return deep in blocks inside a handler counts, and one in `try`, `else` or `finally` outside a handler does not; a nested `def` in a handler is judged on its own, and its value returns do not count toward the outer function; a `lambda` gives the outer function no value return; a name bound in a handler by `=`, annotated or augmented assignment, including inside tuple, list and starred targets, fails when a value return reads it anywhere in its expression, and passes when no value return reads it; attribute and subscript targets bind no name; a handler assignment deep in blocks counts, and one in a nested `def` or class body does not; several failing returns and assignments are listed by line in source order; methods are named by qualified name; test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
+- Reach gate: an absolute and a relative private import fail and a public one passes; a relative import climbs by its level from a module and from a package; a private module, a public name from a private module, a dunder, a third-party module, a star import and a plain `import` pass; a private module under `src/` passes; an alias, an import under `if TYPE_CHECKING:` and one inside a function count, and one name imported twice is one finding listing both lines; `packages` decides own code; test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
 - Absence gate: each absent value, as either side of `==` and `is`, fails alone; `not <expr>` and `len(...) == 0` fail; a tuple of absent values fails and a tuple holding one present value passes; `True`, a non-empty display and a call with arguments are present values; `!=`, `is not`, `in` and a bare expression pass; a test with one present assertion among absent ones passes; `pytest.raises`, `pytest.warns` and an `assert*` method call count as asserting something else; a test with no `assert` passes; an `assert` in a nested `def` is not the test's; `Test` class methods are named by qualified name and methods of other classes are not tests; non-test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
 - Own code: derived from the tree's non-test Python files, root modules and `src/` layout included; `packages` replaces the derived set, and `packages = []` leaves none.
 - Private gate: a private attribute read and write, a `getattr` family call bare and on a chain, `patch.object`, a private segment in a `patch` or `setattr` dotted string, a private module segment and a private imported name each fail; `self` and `cls` receivers, dunders, named-tuple members and names the file defines pass; a third-party private import passes; sites at module level report under `<module>`; several sites list their names and lines; exemption and each audit message.
@@ -709,6 +739,8 @@ Per repository, one PR:
 1. Add `filepawl` to dev dependencies (git URL pinned to a tag) and a pre-commit entry `repo: https://github.com/ohshitgorillas/filepawl`, `rev: vX.Y.Z`, hook `filepawl`. 2. Write `[tool.filepawl]` in `pyproject.toml` only where the repository departs from defaults: HQPTuner adds a `javascript` block and the `junkcal_fixture.py` exemption; Gauntlet adds `**/*.sh` to `include`. For the barrels gate, HQPTuner sets `include` to `hqptuner/**/*.py` and `scripts/**/*.py`, `forwarders` to its `core`, `lanes`, `presets`, `engine` and `conf` packages, and carries its two `presetops.py` forwarder exemptions over with their reasons. Trivia Judge sets `include` and `forwarders` to `triviajudge/**` and `scripts/**`. Gauntlet sets `include` to `hooks/**/*.py` and `scripts/**/*.py`. Gauntlet's script also reads untracked files, and filepawl does not. The nesting gate needs no policy in any of the three: its default `include` is the file set all three measure, and none carries a nesting exemption. The returns gate is new to all three; its findings are decided per repository, as directory-gate findings are. So is the absence gate, whose findings fall in each repository's tests. 3. Run `filepawl init`. Existing `ALLOWANCE` values need no import: the old ratchet already forced exact equality with current lengths, so `init` reproduces them. Carry Trivia Judge's per-entry comments over with `filepawl accept <path> --reason "..."`. 4. Run `filepawl check`; expect clean. Directory gate may surface new findings; those are decided per repository, not silently exempted. 5. Delete the old length, barrels and nesting scripts, their tests, and their Makefile / pre-commit / gate-runner wiring. Replace the CONTRIBUTING and CLAUDE.md prose with one line pointing at `filepawl check` and `filepawl accept`.
 
 For the clocks gate, HQPTuner sets `names` to `timeout`, `interval`, `delay` and `alarm_threshold`, and exempts per function, with its reason, each browser test whose bounded wait the gate reports.
+
+Each repository decides its reach findings, as it decides directory-gate findings.
 
 ## 11. Open items deferred
 
