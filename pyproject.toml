@@ -44,5 +44,8 @@ line-length = 88
 python_version = "3.12"
 strict = true
 
+[tool.filepawl.judge]
+enabled = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
