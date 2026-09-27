@@ -7,6 +7,7 @@ from importlib.metadata import entry_points
 from typing import TYPE_CHECKING
 
 from filepawl.config import Policy
+from filepawl.config_suite import SUITE_TABLES
 from filepawl.errors import ConfigError
 
 if TYPE_CHECKING:
@@ -25,7 +26,7 @@ _BUILTIN_GATES: tuple[tuple[str, str, str], ...] = (
     ("returns", "filepawl.gates.returns", "ReturnsGate"),
     ("named_results", "filepawl.gates.named_results", "NamedResultsGate"),
     ("handlers", "filepawl.gates.handlers", "HandlersGate"),
-    ("absence", "filepawl.gates.absence", "AbsenceGate"),
+    ("absence", "filepawl.gates.suite.absence", "AbsenceGate"),
 )
 
 _GATE_ATTRS = ("name", "run", "accept")
@@ -83,7 +84,8 @@ def _is_enabled(name: str, policy: Policy) -> bool:
         return policy.named_results.enabled
     if name == "handlers":
         return policy.handlers.enabled
-    if name == "absence":
-        return policy.absence.enabled
+    if name in SUITE_TABLES:
+        enabled: bool = getattr(policy.suite, name).enabled
+        return enabled
     table = policy.gate_tables.get(name, {})
     return table.get("enabled", True) is not False

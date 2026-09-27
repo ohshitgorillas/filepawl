@@ -134,7 +134,7 @@ class AbsenceGate:
     name: str = "absence"
 
     def run(self, tree: Tree, policy: Policy, state: State) -> list[Finding]:
-        exempt = policy.absence.exempt
+        exempt = policy.suite.absence.exempt
         findings: list[Finding] = []
         measured: dict[str, dict[str, bool]] = {}
         for path in self._checked(tree, policy):
@@ -155,7 +155,7 @@ class AbsenceGate:
         return sorted(findings)
 
     def _checked(self, tree: Tree, policy: Policy) -> list[str]:
-        include = policy.absence.include
+        include = policy.suite.absence.include
         return [
             path
             for path in tree.files
@@ -166,7 +166,7 @@ class AbsenceGate:
         self, measured: dict[str, dict[str, bool]], policy: Policy
     ) -> list[Finding]:
         findings = []
-        for key in sorted(policy.absence.exempt):
+        for key in sorted(policy.suite.absence.exempt):
             path, _, name = key.partition("::")
             if path not in measured:
                 message = "names no file"

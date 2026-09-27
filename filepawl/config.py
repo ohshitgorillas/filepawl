@@ -6,6 +6,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from filepawl.config_suite import SUITE_TABLES, SuitePolicies, build_suite
 from filepawl.config_values import (
     bool_value,
     check_keys,
@@ -30,7 +31,7 @@ _RESERVED_TABLES = (
     "returns",
     "named_results",
     "handlers",
-    "absence",
+    *SUITE_TABLES,
 )
 _TOP_LEVEL_SCALAR_KEYS = ("languages", "tests")
 _LANGUAGE_KEYS = ("include", "mover", "mover_command")
@@ -47,7 +48,6 @@ _NESTING_KEYS = ("include", "max_depth", "exempt", "enabled")
 _RETURNS_KEYS = ("include", "exempt", "enabled")
 _NAMED_RESULTS_KEYS = ("include", "exclude", "enabled")
 _HANDLERS_KEYS = ("include", "exempt", "enabled")
-_ABSENCE_KEYS = ("include", "exempt", "enabled")
 
 
 @dataclass(frozen=True)
@@ -112,13 +112,6 @@ class HandlersPolicy:
 
 
 @dataclass(frozen=True)
-class AbsencePolicy:
-    include: tuple[str, ...] = ("**/*.py",)
-    exempt: dict[str, str] = field(default_factory=dict)
-    enabled: bool = True
-
-
-@dataclass(frozen=True)
 class Policy:
     languages: dict[str, LanguagePolicy]
     tests: tuple[str, ...]
@@ -131,7 +124,7 @@ class Policy:
     returns: ReturnsPolicy = field(default_factory=ReturnsPolicy)
     named_results: NamedResultsPolicy = field(default_factory=NamedResultsPolicy)
     handlers: HandlersPolicy = field(default_factory=HandlersPolicy)
-    absence: AbsencePolicy = field(default_factory=AbsencePolicy)
+    suite: SuitePolicies = field(default_factory=SuitePolicies)
 
 
 def default_policy() -> Policy:
@@ -187,7 +180,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     returns = _build_returns(raw.get("returns"))
     named_results = _build_named_results(raw.get("named_results"))
     handlers = _build_handlers(raw.get("handlers"))
-    absence = _build_absence(raw.get("absence"))
+    suite = build_suite(raw)
 
     languages = {name: _build_language(name, raw.get(name)) for name in language_names}
 
@@ -213,7 +206,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         returns=returns,
         named_results=named_results,
         handlers=handlers,
-        absence=absence,
+        suite=suite,
     )
 
 
@@ -368,19 +361,5 @@ def _build_handlers(table: object) -> HandlersPolicy:
     return HandlersPolicy(
         include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
         exempt=exempt_table(table.get("exempt"), "[tool.filepawl.handlers.exempt]"),
-        enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
-    )
-
-
-def _build_absence(table: object) -> AbsencePolicy:
-    if table is None:
-        return AbsencePolicy()
-    where = "[tool.filepawl.absence]"
-    if not isinstance(table, dict):
-        raise ConfigError(f"{where} must be a table")
-    check_keys(table, _ABSENCE_KEYS, where)
-    return AbsencePolicy(
-        include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
-        exempt=exempt_table(table.get("exempt"), "[tool.filepawl.absence.exempt]"),
         enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
     )

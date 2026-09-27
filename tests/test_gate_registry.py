@@ -131,8 +131,11 @@ def test_absence_disabled_via_policy_absence_enabled(
         (("absence", "fake_absence_mod", "FakeAbsence"),),
     )
     monkeypatch.setattr(registry, "entry_points", lambda group: [])
-    absence = dataclasses.replace(default_policy().absence, enabled=False)
-    policy = dataclasses.replace(default_policy(), absence=absence)
+    suite = default_policy().suite
+    absence = dataclasses.replace(suite.absence, enabled=False)
+    policy = dataclasses.replace(
+        default_policy(), suite=dataclasses.replace(suite, absence=absence)
+    )
 
     enabled = [g.name for g in registry.discover_gates(default_policy())]
     disabled = [g.name for g in registry.discover_gates(policy)]

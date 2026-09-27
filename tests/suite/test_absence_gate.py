@@ -1,4 +1,4 @@
-"""Tests for filepawl.gates.absence: the absence gate (design.md §6.11)."""
+"""Tests for filepawl.gates.suite.absence: the absence gate (design.md §6.11)."""
 
 from __future__ import annotations
 
@@ -8,10 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from filepawl.config import AbsencePolicy, Policy, default_policy
+from filepawl.config import Policy, default_policy
+from filepawl.config_suite import AbsencePolicy, SuitePolicies
 from filepawl.gates import registry
-from filepawl.gates.absence import AbsenceGate
 from filepawl.gates.base import Finding
+from filepawl.gates.suite.absence import AbsenceGate
 from filepawl.state import State
 from filepawl.tree import build_tree
 
@@ -76,9 +77,8 @@ def _stale(key: str, message: str) -> Finding:
 
 
 def _policy(**absence: object) -> Policy:
-    return dataclasses.replace(
-        default_policy(), absence=AbsencePolicy(**absence)  # type: ignore[arg-type]
-    )
+    suite = SuitePolicies(absence=AbsencePolicy(**absence))  # type: ignore[arg-type]
+    return dataclasses.replace(default_policy(), suite=suite)
 
 
 def _run(root: Path, policy: Policy) -> list[Finding]:
@@ -340,7 +340,7 @@ class TestExemptions:
 def test_gate_is_the_last_built_in() -> None:
     assert registry._BUILTIN_GATES[-1] == (
         "absence",
-        "filepawl.gates.absence",
+        "filepawl.gates.suite.absence",
         "AbsenceGate",
     )
 
