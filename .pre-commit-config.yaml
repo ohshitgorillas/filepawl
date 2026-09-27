@@ -37,3 +37,9 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: filepawl-working-tree
+        name: filepawl check (working tree)
+        entry: .venv/bin/filepawl check
+        language: system
+        pass_filenames: false
+        always_run: true
