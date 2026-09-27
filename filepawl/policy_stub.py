@@ -87,6 +87,14 @@ DEFAULT_POLICY_STUB = (
             '# "path::qualified.name" = reason. Human-edited. A function that '
             "patches on purpose.",
             "",
+            "[tool.filepawl.clocks]",
+            'include = ["**/*.py"]',
+            'names = ["timeout", "interval", "delay"]',
+            "",
+            "[tool.filepawl.clocks.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A function that '
+            "runs on the wall clock on purpose.",
+            "",
             "[tool.filepawl.python]",
             'include = ["**/*.py"]',
             'mover = "rope"',

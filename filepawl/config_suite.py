@@ -20,15 +20,24 @@ class SuiteGatePolicy:
 
 
 @dataclass(frozen=True)
+class ClocksPolicy(SuiteGatePolicy):
+    """The clocks gate's table: the plain keys and the pacing names whose small
+    durations it reads (design.md §6.20)."""
+
+    names: tuple[str, ...] = ("timeout", "interval", "delay")
+
+
+@dataclass(frozen=True)
 class SuitePolicies:
     """One policy per test-suite gate, keyed by the gate's table name."""
 
     absence: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     private: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     mocks: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
+    clocks: ClocksPolicy = field(default_factory=ClocksPolicy)
 
 
-SUITE_TABLES = ("absence", "private", "mocks")
+SUITE_TABLES = ("absence", "private", "mocks", "clocks")
 
 
 def build_suite(raw: dict[str, object]) -> SuitePolicies:
@@ -36,6 +45,7 @@ def build_suite(raw: dict[str, object]) -> SuitePolicies:
         absence=_build_plain("absence", raw.get("absence")),
         private=_build_plain("private", raw.get("private")),
         mocks=_build_plain("mocks", raw.get("mocks")),
+        clocks=_build_clocks(raw.get("clocks")),
     )
 
 
@@ -50,4 +60,21 @@ def _build_plain(name: str, table: object) -> SuiteGatePolicy:
         include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
         exempt=exempt_table(table.get("exempt"), f"[tool.filepawl.{name}.exempt]"),
         enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
+    )
+
+
+def _build_clocks(table: object) -> ClocksPolicy:
+    if table is None:
+        return ClocksPolicy()
+    if not isinstance(table, dict):
+        raise ConfigError("[tool.filepawl.clocks] must be a table")
+    plain = _build_plain(
+        "clocks", {key: value for key, value in table.items() if key != "names"}
+    )
+    names = table.get("names", list(ClocksPolicy().names))
+    return ClocksPolicy(
+        include=plain.include,
+        exempt=plain.exempt,
+        enabled=plain.enabled,
+        names=str_list(names, "[tool.filepawl.clocks].names"),
     )
