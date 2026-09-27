@@ -5,3 +5,10 @@
   language: python
   pass_filenames: false
   always_run: true
+- id: filepawl-judge
+  name: filepawl judge
+  description: Asks a model whether a change that silenced the handlers or returns gate fixed what the gate targets.
+  entry: filepawl judge
+  language: python
+  pass_filenames: false
+  always_run: true

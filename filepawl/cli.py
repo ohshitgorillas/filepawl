@@ -1,6 +1,7 @@
-"""Command-line entry point: `check`, `accept`, `init`, `mv`, `hook` (§6.4, §7).
+"""Command-line entry point: `check`, `accept`, `init`, `mv`, `hook`, `judge` (§7).
 
-`mv` lives in `cli_mv.py` and `hook` in `hook.py`; everything else is here.
+`mv` lives in `cli_mv.py`, `hook` in `hook.py` and `judge` in
+`judge/command.py`; everything else is here.
 
 Every failure path routes through `FilepawlError`, which `main` prints to
 stderr as `filepawl: <message>` and turns into exit 2. Findings are
@@ -65,6 +66,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("hook", help="edit-time notice for a Claude Code hook")
 
+    judge = subparsers.add_parser("judge", help="ask a model about silenced findings")
+    judge.add_argument(
+        "--head", action="store_true", help="judge HEAD against its first parent"
+    )
+
     return parser
 
 
@@ -90,6 +96,10 @@ def main(argv: list[str] | None = None) -> int:
             from filepawl.hook import run_hook
 
             return run_hook(sys.stdin, sys.stdout)
+        if args.command == "judge":
+            from filepawl.judge.command import run_judge
+
+            return run_judge(args.head, sys.stdout)
     except FilepawlError as exc:
         # Exit 2 as argparse does for a usage error: the failure leaves the
         # process as an exit status, not as a value `main` hands back.
