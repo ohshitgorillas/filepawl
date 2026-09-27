@@ -10,6 +10,7 @@ from filepawl.config import (
     BarrelsPolicy,
     DircountPolicy,
     HandlersPolicy,
+    JudgePolicy,
     LanguagePolicy,
     LengthPolicy,
     NamedResultsPolicy,
@@ -227,6 +228,62 @@ class TestHandlersPolicy:
     def test_stub_carries_the_handlers_block(self) -> None:
         assert "# [tool.filepawl.handlers]" in DEFAULT_POLICY_STUB
         assert "# [tool.filepawl.handlers.exempt]" in DEFAULT_POLICY_STUB
+
+
+class TestJudgePolicy:
+    def test_defaults(self) -> None:
+        assert default_policy().judge == JudgePolicy(
+            enabled=False, model="claude-sonnet-5", batch=6, timeout=300, exempt={}
+        )
+
+    def test_table_is_read(self, tmp_path: Path) -> None:
+        write(
+            tmp_path,
+            "[tool.filepawl.judge]\n"
+            "enabled = true\n"
+            'model = "claude-opus-5"\n'
+            "batch = 3\n"
+            "timeout = 60\n"
+            "[tool.filepawl.judge.exempt]\n"
+            '"pkg/hook.py::run_hook" = "the spec requires the hook to stay silent"\n',
+        )
+        policy = load_policy(tmp_path)
+        assert policy.judge == JudgePolicy(
+            enabled=True,
+            model="claude-opus-5",
+            batch=3,
+            timeout=60,
+            exempt={
+                "pkg/hook.py::run_hook": "the spec requires the hook to stay silent"
+            },
+        )
+        assert "judge" not in policy.gate_tables
+
+    def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
+        write(tmp_path, "[tool.filepawl.judge]\nretries = 3\n")
+        with pytest.raises(ConfigError, match="unknown key 'retries'"):
+            load_policy(tmp_path)
+
+    def test_model_must_be_a_string(self, tmp_path: Path) -> None:
+        write(tmp_path, "[tool.filepawl.judge]\nmodel = 5\n")
+        with pytest.raises(ConfigError, match=r"judge\]\.model must be a string"):
+            load_policy(tmp_path)
+
+    @pytest.mark.parametrize("key", ["batch", "timeout"])
+    def test_counts_must_be_positive_integers(self, tmp_path: Path, key: str) -> None:
+        write(tmp_path, f"[tool.filepawl.judge]\n{key} = 0\n")
+        with pytest.raises(ConfigError, match=f"{key} must be a positive integer"):
+            load_policy(tmp_path)
+
+    def test_exemption_reason_must_be_a_string(self, tmp_path: Path) -> None:
+        write(tmp_path, '[tool.filepawl.judge.exempt]\n"a.py::f" = 1\n')
+        with pytest.raises(ConfigError, match="must be a string reason"):
+            load_policy(tmp_path)
+
+    def test_stub_carries_the_judge_block(self) -> None:
+        assert "# [tool.filepawl.judge]" in DEFAULT_POLICY_STUB
+        assert '# model = "claude-sonnet-5"' in DEFAULT_POLICY_STUB
+        assert "# [tool.filepawl.judge.exempt]" in DEFAULT_POLICY_STUB
 
 
 class TestDefaultPolicy:

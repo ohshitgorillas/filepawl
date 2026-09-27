@@ -95,6 +95,16 @@ DEFAULT_POLICY_STUB = (
             '# "path::qualified.name" = reason. Human-edited. A function that '
             "runs on the wall clock on purpose.",
             "",
+            "[tool.filepawl.judge]",
+            "enabled = false",
+            'model = "claude-sonnet-5"',
+            "batch = 6",
+            "timeout = 300",
+            "",
+            "[tool.filepawl.judge.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A function the '
+            "judge must not be asked about.",
+            "",
             "[tool.filepawl.python]",
             'include = ["**/*.py"]',
             'mover = "rope"',

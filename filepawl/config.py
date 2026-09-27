@@ -12,7 +12,9 @@ from filepawl.config_values import (
     check_keys,
     exempt_table,
     int_value,
+    positive_int,
     str_list,
+    str_value,
 )
 from filepawl.errors import ConfigError
 
@@ -31,6 +33,7 @@ _RESERVED_TABLES = (
     "returns",
     "named_results",
     "handlers",
+    "judge",
     *SUITE_TABLES,
 )
 _TOP_LEVEL_SCALAR_KEYS = ("languages", "tests", "packages")
@@ -112,6 +115,15 @@ class HandlersPolicy:
 
 
 @dataclass(frozen=True)
+class JudgePolicy:
+    enabled: bool = False
+    model: str = "claude-sonnet-5"
+    batch: int = 6
+    timeout: int = 300
+    exempt: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Policy:
     languages: dict[str, LanguagePolicy]
     tests: tuple[str, ...]
@@ -124,6 +136,7 @@ class Policy:
     returns: ReturnsPolicy = field(default_factory=ReturnsPolicy)
     named_results: NamedResultsPolicy = field(default_factory=NamedResultsPolicy)
     handlers: HandlersPolicy = field(default_factory=HandlersPolicy)
+    judge: JudgePolicy = field(default_factory=JudgePolicy)
     suite: SuitePolicies = field(default_factory=SuitePolicies)
     packages: tuple[str, ...] | None = None
 
@@ -181,6 +194,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     returns = _build_returns(raw.get("returns"))
     named_results = _build_named_results(raw.get("named_results"))
     handlers = _build_handlers(raw.get("handlers"))
+    judge = _build_judge(raw.get("judge"))
     suite = build_suite(raw)
     raw_packages = raw.get("packages")
     packages = None if raw_packages is None else str_list(raw_packages, "packages")
@@ -209,6 +223,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         returns=returns,
         named_results=named_results,
         handlers=handlers,
+        judge=judge,
         suite=suite,
         packages=packages,
     )
@@ -366,4 +381,20 @@ def _build_handlers(table: object) -> HandlersPolicy:
         include=str_list(table.get("include", ["**/*.py"]), f"{where}.include"),
         exempt=exempt_table(table.get("exempt"), "[tool.filepawl.handlers.exempt]"),
         enabled=bool_value(table.get("enabled", True), f"{where}.enabled"),
+    )
+
+
+def _build_judge(table: object) -> JudgePolicy:
+    if table is None:
+        return JudgePolicy()
+    where = "[tool.filepawl.judge]"
+    if not isinstance(table, dict):
+        raise ConfigError(f"{where} must be a table")
+    check_keys(table, ("enabled", "model", "batch", "timeout", "exempt"), where)
+    return JudgePolicy(
+        enabled=bool_value(table.get("enabled", False), f"{where}.enabled"),
+        model=str_value(table.get("model", "claude-sonnet-5"), f"{where}.model"),
+        batch=positive_int(table.get("batch", 6), f"{where}.batch"),
+        timeout=positive_int(table.get("timeout", 300), f"{where}.timeout"),
+        exempt=exempt_table(table.get("exempt"), "[tool.filepawl.judge.exempt]"),
     )

@@ -42,6 +42,19 @@ def int_value(value: object, where: str) -> int:
     return value
 
 
+def positive_int(value: object, where: str) -> int:
+    count = int_value(value, where)
+    if count < 1:
+        raise ConfigError(f"{where} must be a positive integer")
+    return count
+
+
+def str_value(value: object, where: str) -> str:
+    if not isinstance(value, str):
+        raise ConfigError(f"{where} must be a string")
+    return value
+
+
 def bool_value(value: object, where: str) -> bool:
     if not isinstance(value, bool):
         raise ConfigError(f"{where} must be a boolean")
