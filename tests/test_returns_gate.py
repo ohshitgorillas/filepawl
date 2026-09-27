@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
 from filepawl.config import Policy, ReturnsPolicy, default_policy
 from filepawl.gates.base import Finding
-from filepawl.gates.returns import ReturnsGate
+from filepawl.gates.returns import ReturnsGate, failing_names
 from filepawl.state import State
 from filepawl.tree import build_tree
 
@@ -20,6 +23,21 @@ TWO_SHAPES = (
     '        return {"a": 1, "b": 2}\n'
     '    return {"a": 1}\n'
 )
+
+
+PADDED = (
+    "def f(c):\n"
+    "    if c:\n"
+    '        return {"a": 1, "warning": "slow"}\n'
+    '    return {"a": 1, "warning": None}\n'
+)
+
+
+def _padded(keys: str) -> str:
+    return (
+        f"pads {keys} with an empty value on some returns"
+        " — a padded key is a second shape; return a named type"
+    )
 
 
 def _shapes(*shapes: str) -> str:
@@ -179,6 +197,68 @@ class TestShapes:
         assert _run(root, _policy()) == [Finding("m.py::f", _shapes("{a}", "{b}"))]
 
 
+class TestPadding:
+    def test_key_empty_on_one_return_and_set_on_another_fails(
+        self, repo: RepoFactory
+    ) -> None:
+        root = repo({"m.py": PADDED})
+        assert _run(root, _policy()) == [Finding("m.py::f", _padded("{warning}"))]
+
+    @pytest.mark.parametrize(
+        "empty",
+        ["None", '""', "b''", "[]", "{}", "()", "set()", "list()", "dict()", "str()"],
+    )
+    def test_each_empty_value_pads(self, repo: RepoFactory, empty: str) -> None:
+        source = PADDED.replace("None", empty)
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [Finding("m.py::f", _padded("{warning}"))]
+
+    @pytest.mark.parametrize("value", ["False", "0", "[None]", "list(x)", "note"])
+    def test_value_that_is_not_empty_does_not_pad(
+        self, repo: RepoFactory, value: str
+    ) -> None:
+        root = repo({"m.py": PADDED.replace("None", value), "n.py": PADDED})
+        assert _run(root, _policy()) == [Finding("n.py::f", _padded("{warning}"))]
+
+    def test_key_empty_on_every_return_passes(self, repo: RepoFactory) -> None:
+        root = repo({"m.py": PADDED.replace('"slow"', "None"), "n.py": PADDED})
+        assert _run(root, _policy()) == [Finding("n.py::f", _padded("{warning}"))]
+
+    def test_single_return_passes(self, repo: RepoFactory) -> None:
+        source = 'def f():\n    return {"a": 1, "warning": None}\n'
+        root = repo({"m.py": source, "n.py": PADDED})
+        assert _run(root, _policy()) == [Finding("n.py::f", _padded("{warning}"))]
+
+    def test_padded_keys_listed_sorted(self, repo: RepoFactory) -> None:
+        source = (
+            "def f(c):\n"
+            "    if c:\n"
+            '        return {"b": None, "a": 1}\n'
+            '    return {"b": 2, "a": []}\n'
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [Finding("m.py::f", _padded("{a, b}"))]
+
+    def test_function_of_several_shapes_reports_shapes_only(
+        self, repo: RepoFactory
+    ) -> None:
+        source = PADDED + '    return {"a": 1}\n'
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [
+            Finding("m.py::f", _shapes("{a, warning}", "{a}"))
+        ]
+
+    def test_exemption_covers_padding(self, repo: RepoFactory) -> None:
+        root = repo({"m.py": PADDED})
+        plain = _run(root, _policy())
+        exempt = _run(root, _policy(exempt={"m.py::f": "wire format"}))
+        assert (plain, exempt) == ([Finding("m.py::f", _padded("{warning}"))], [])
+
+    def test_failing_names_include_padded_functions(self) -> None:
+        clean = 'def g():\n    return {"a": 1}\n'
+        assert failing_names(ast.parse(PADDED + clean)) == frozenset({"f"})
+
+
 class TestFileSet:
     def test_test_paths_are_not_checked(self, repo: RepoFactory) -> None:
         root = repo({"tests/test_m.py": TWO_SHAPES, "m.py": TWO_SHAPES})
@@ -224,7 +304,7 @@ class TestExemptions:
         root = repo({"m.py": 'def f():\n    return {"a": 1}\n'})
         policy = _policy(exempt={"m.py::f": "r"})
         assert _run(root, policy) == [
-            _stale("m.py::f", "returns one shape, so it needs no exemption")
+            _stale("m.py::f", "returns one unpadded shape, so it needs no exemption")
         ]
 
     def test_entry_covers_every_function_its_key_names(self, repo: RepoFactory) -> None:

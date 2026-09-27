@@ -21,13 +21,39 @@ _WHERE = "[tool.filepawl.returns.exempt]"
 _FUNCS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 _Shape = frozenset[str]
-# (qualified name, shapes of its dict-literal returns in source order) per
-# function, outermost first.
-_Found = list[tuple[str, list[_Shape]]]
+_EMPTY_CONSTANTS = (None, "", b"")
+_EMPTY_CALLS = frozenset({"list", "dict", "tuple", "set", "frozenset", "str"})
 
 
-def _shape(node: ast.Return) -> _Shape | None:
-    """Return the key set of a returned dict literal, or None when it has none.
+@dataclass(frozen=True)
+class _Literal:
+    """A returned dict literal: its key set, and the keys it maps to an empty value."""
+
+    shape: _Shape
+    empty: _Shape
+
+
+# (qualified name, its dict-literal returns in source order) per function,
+# outermost first.
+_Found = list[tuple[str, list[_Literal]]]
+
+
+def _is_empty(node: ast.expr) -> bool:
+    """Return whether a value is None, an empty string, display or constructor."""
+    if isinstance(node, ast.Constant):
+        return node.value in _EMPTY_CONSTANTS and not isinstance(node.value, bool)
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return not node.elts
+    if isinstance(node, ast.Dict):
+        return not node.keys
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        bare = not node.args and not node.keywords
+        return bare and node.func.id in _EMPTY_CALLS
+    return False
+
+
+def _literal(node: ast.Return) -> _Literal | None:
+    """Return a returned dict literal's keys, or None when it has no knowable shape.
 
     A literal with a `**` spread (a None key) or a key that is not a string
     constant has no knowable shape.
@@ -35,16 +61,19 @@ def _shape(node: ast.Return) -> _Shape | None:
     value = node.value
     if not isinstance(value, ast.Dict):
         return None
-    keys = [
-        k.value
-        for k in value.keys
+    pairs = [
+        (k.value, v)
+        for k, v in zip(value.keys, value.values)
         if isinstance(k, ast.Constant) and isinstance(k.value, str)
     ]
-    return frozenset(keys) if len(keys) == len(value.keys) else None
+    if len(pairs) != len(value.keys):
+        return None
+    empty = frozenset(key for key, v in pairs if _is_empty(v))
+    return _Literal(frozenset(key for key, _ in pairs), empty)
 
 
 def _walk(
-    body: list[ast.stmt], prefix: str, found: _Found, shapes: list[_Shape]
+    body: list[ast.stmt], prefix: str, found: _Found, shapes: list[_Literal]
 ) -> None:
     """Add the shapes a list of statements returns to `shapes`, recording functions."""
     for node in body:
@@ -53,7 +82,7 @@ def _walk(
         elif isinstance(node, ast.ClassDef):
             _walk(node.body, f"{prefix}{node.name}.", found, [])
         elif isinstance(node, ast.Return):
-            shapes += [shape for shape in [_shape(node)] if shape is not None]
+            shapes += [shape for shape in [_literal(node)] if shape is not None]
         else:
             for inner in block_bodies(node):
                 _walk(inner, prefix, found, shapes)
@@ -64,7 +93,7 @@ def _record(
 ) -> None:
     """Append a function's returned shapes to `found`, outermost first."""
     name = f"{prefix}{node.name}"
-    shapes: list[_Shape] = []
+    shapes: list[_Literal] = []
     found.append((name, shapes))
     _walk(node.body, f"{name}.", found, shapes)
 
@@ -76,19 +105,42 @@ def returned_shapes(module: ast.Module) -> _Found:
     return found
 
 
-def _distinct(shapes: list[_Shape]) -> list[_Shape]:
+def _distinct(literals: list[_Literal]) -> list[_Shape]:
     """Return each shape once, in order of first appearance."""
-    return list(dict.fromkeys(shapes))
+    return list(dict.fromkeys(literal.shape for literal in literals))
+
+
+def _padded(literals: list[_Literal]) -> _Shape:
+    """Return the keys some returns map to an empty value and others do not."""
+    if len(_distinct(literals)) != 1:
+        return frozenset()
+    empty = [literal.empty for literal in literals]
+    return frozenset.union(*empty) - frozenset.intersection(*empty)
 
 
 def _spell(shape: _Shape) -> str:
     return "{" + ", ".join(sorted(shape)) + "}"
 
 
+def _message(literals: list[_Literal]) -> str | None:
+    """Return the finding a function's returns earn, or None when they pass."""
+    distinct = _distinct(literals)
+    if len(distinct) > 1:
+        spelled = "; ".join(_spell(shape) for shape in distinct)
+        return f"returns dicts of {len(distinct)} shapes ({spelled}) — return one shape"
+    padded = _padded(literals)
+    if padded:
+        return (
+            f"pads {_spell(padded)} with an empty value on some returns"
+            " — a padded key is a second shape; return a named type"
+        )
+    return None
+
+
 def failing_names(module: ast.Module) -> frozenset[str]:
     """Return the qualified name of every function the gate fails in a module."""
     return frozenset(
-        name for name, shapes in returned_shapes(module) if len(_distinct(shapes)) > 1
+        name for name, literals in returned_shapes(module) if _message(literals)
     )
 
 
@@ -111,15 +163,10 @@ class ReturnsGate:
                 # has no shape to judge.
                 continue
             measured[path] = returned_shapes(module)
-            for func, shapes in measured[path]:
-                distinct = _distinct(shapes)
-                if len(distinct) < 2 or f"{path}::{func}" in exempt:
+            for func, literals in measured[path]:
+                message = _message(literals)
+                if message is None or f"{path}::{func}" in exempt:
                     continue
-                spelled = "; ".join(_spell(shape) for shape in distinct)
-                message = (
-                    f"returns dicts of {len(distinct)} shapes ({spelled})"
-                    " — return one shape"
-                )
                 findings.append(Finding(f"{path}::{func}", message))
         findings += self._stale(measured, policy)
         return sorted(findings)
@@ -141,8 +188,8 @@ class ReturnsGate:
                 message = "names no file"
             elif not named:
                 message = "names no function"
-            elif all(len(_distinct(shapes)) < 2 for shapes in named):
-                message = "returns one shape, so it needs no exemption"
+            elif not any(_message(literals) for literals in named):
+                message = "returns one unpadded shape, so it needs no exemption"
             else:
                 continue
             findings.append(Finding(_POLICY_FILE, f"{_WHERE} {key!r}: {message}"))

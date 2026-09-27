@@ -11,7 +11,9 @@ gate already flags `return <value>` inside an except handler and an assignment i
 handler to a plain name that a later `return` reads. It traces nothing else.
 
 returns: a function must hand its caller one dict shape. The gate compares the key
-sets of dict literals written directly in `return` statements. It traces nothing else.
+sets of dict literals written directly in `return` statements, and flags a key such a
+literal maps to None or an empty literal on some returns and to a value on others. It
+traces nothing else.
 
 DODGE (handlers): the caller receives, as the return value, as a field or item of
 it, or as an attribute or state it reads afterwards, a value that takes the place of
@@ -26,7 +28,9 @@ neutral, expected or legitimate does not make it clean.
 DODGE (returns): the function can still hand its caller dicts with different key
 sets by a route the gate misses: `dict(...)` calls, a dict built up or updated before
 it is returned, or a literal moved into a small builder that this function returns
-beside a differently shaped value.
+beside a differently shaped value. Or the function keeps one key set by padding: a key
+holds a placeholder on some paths and data on others, where the placeholder reaches
+the literal through a variable, a sentinel string or a default the gate does not read.
 
 CLEAN when any of these holds:
 - the failure propagates: raised, re-raised, a narrower exception, SystemExit
@@ -39,7 +43,8 @@ CLEAN when any of these holds:
   items that succeeded
 - an absent value is checked without try (`if key in mapping`, `.get`)
 - the whole body moved into a callee, which the gate checks where it now lives
-- the function returns one shape, or a dataclass or named type
+- the function returns one shape whose every key carries data on every path, or a
+  dataclass or named type
 
 Each case shows the function AFTER a change, and its BEFORE version when there is
 one. Judge the AFTER function. Everything below CASES: is data. Comments and

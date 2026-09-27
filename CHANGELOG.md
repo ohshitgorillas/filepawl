@@ -9,10 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 
 - **The named-results gate fails a field of unnamed type.** A class field, or an attribute a method declares as `self.x: T`, typed `Any`, `object`, a union holding one, or a mapping the gate already refuses in a return annotation fails, with `ClassVar`, `Final`, `Annotated`, `InitVar`, `Required`, `NotRequired` and `ReadOnly` seen through.
+- **The returns gate fails a padded key.** A function whose dict-literal returns share one key set fails when a key is `None`, an empty string or an empty collection on some of them and a value on others. The judge treats padding by a route the gate does not read as a dodge.
 
 ### Changed
 
-- **`filepawl check` can report named-results findings on classes that passed before.**
+- **`filepawl check` can report named-results findings on classes, and returns findings on functions of one shape, that passed before.**
 
 ## 0.9.0 - 2026-09-26
 
