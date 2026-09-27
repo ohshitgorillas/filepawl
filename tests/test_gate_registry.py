@@ -24,6 +24,7 @@ BUILTINS = [
     "absence",
     "private",
     "mocks",
+    "clocks",
 ]
 
 

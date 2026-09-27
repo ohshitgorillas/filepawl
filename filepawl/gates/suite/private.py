@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
+from filepawl.config import Policy
 from filepawl.gates.suite.common import Imports, SiteGate, is_own_dotted, units
 
 _NAMED_TUPLE = frozenset({"_asdict", "_replace", "_fields", "_field_defaults", "_make"})
@@ -122,7 +123,9 @@ class PrivateGate(SiteGate):
     fix: str = "test through the public surface"
     clean: str = "reaches no private name, so it needs no exemption"
 
-    def sites(self, module: ast.Module, imports: Imports) -> list[tuple[str, int, str]]:
+    def sites(
+        self, module: ast.Module, imports: Imports, policy: Policy
+    ) -> list[tuple[str, int, str]]:
         mine = _file_own(module)
         found = []
         for unit, node in units(module):

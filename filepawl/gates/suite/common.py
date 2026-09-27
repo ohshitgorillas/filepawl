@@ -183,7 +183,9 @@ class SiteGate:
     fix: str
     clean: str
 
-    def sites(self, module: ast.Module, imports: Imports) -> list[tuple[str, int, str]]:
+    def sites(
+        self, module: ast.Module, imports: Imports, policy: Policy
+    ) -> list[tuple[str, int, str]]:
         """Return (unit, line, detail) for every site in a module."""
         raise NotImplementedError
 
@@ -204,7 +206,9 @@ class SiteGate:
                 if isinstance(node, _FUNCS)
             )
             grouped: dict[str, list[tuple[int, str]]] = {}
-            for unit, line, detail in self.sites(module, read_imports(module, own)):
+            for unit, line, detail in self.sites(
+                module, read_imports(module, own), policy
+            ):
                 grouped.setdefault(unit, []).append((line, detail))
             for unit, found in grouped.items():
                 judged[unit] = True

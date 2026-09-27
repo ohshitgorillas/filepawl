@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
+from filepawl.config import Policy
 from filepawl.gates.suite.common import Imports, SiteGate, units
 
 _PATCH = "patch"
@@ -135,7 +136,9 @@ class MocksGate(SiteGate):
     fix: str = "fake at the wire, never a patch"
     clean: str = "patches nothing, so it needs no exemption"
 
-    def sites(self, module: ast.Module, imports: Imports) -> list[tuple[str, int, str]]:
+    def sites(
+        self, module: ast.Module, imports: Imports, policy: Policy
+    ) -> list[tuple[str, int, str]]:
         imported = imported_names(module)
         return [
             (unit, getattr(node, "lineno", 0), _PATCH)
