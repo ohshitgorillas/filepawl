@@ -10,6 +10,7 @@ DEFAULT_POLICY_STUB = (
             "[tool.filepawl]",
             'languages = ["python"]',
             'tests = ["tests/**"]',
+            '# packages = ["mypkg"]  # own code; derived from the tree when absent',
             "",
             "[tool.filepawl.length]",
             "cap = 500",

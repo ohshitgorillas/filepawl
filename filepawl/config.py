@@ -33,7 +33,7 @@ _RESERVED_TABLES = (
     "handlers",
     *SUITE_TABLES,
 )
-_TOP_LEVEL_SCALAR_KEYS = ("languages", "tests")
+_TOP_LEVEL_SCALAR_KEYS = ("languages", "tests", "packages")
 _LANGUAGE_KEYS = ("include", "mover", "mover_command")
 _LENGTH_KEYS = ("cap", "cap_tests", "watch", "enabled")
 _DIRCOUNT_KEYS = ("cap", "cap_tests", "exclude", "enabled")
@@ -125,6 +125,7 @@ class Policy:
     named_results: NamedResultsPolicy = field(default_factory=NamedResultsPolicy)
     handlers: HandlersPolicy = field(default_factory=HandlersPolicy)
     suite: SuitePolicies = field(default_factory=SuitePolicies)
+    packages: tuple[str, ...] | None = None
 
 
 def default_policy() -> Policy:
@@ -181,6 +182,8 @@ def _build_policy(raw: dict[str, object]) -> Policy:
     named_results = _build_named_results(raw.get("named_results"))
     handlers = _build_handlers(raw.get("handlers"))
     suite = build_suite(raw)
+    raw_packages = raw.get("packages")
+    packages = None if raw_packages is None else str_list(raw_packages, "packages")
 
     languages = {name: _build_language(name, raw.get(name)) for name in language_names}
 
@@ -207,6 +210,7 @@ def _build_policy(raw: dict[str, object]) -> Policy:
         named_results=named_results,
         handlers=handlers,
         suite=suite,
+        packages=packages,
     )
 
 
