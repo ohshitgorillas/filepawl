@@ -15,11 +15,12 @@ filepawl extracts the engine into one installable package with:
 - a sixth gate against functions that return a mapping without naming its shape;
 - a seventh gate against functions that return from an exception handler;
 - an eighth gate against tests that assert only an absent value;
+- seven test-suite gates against tests that reach private names, patch or mock the repository's own code, read the host environment, compare against a golden dump, carry a name that states no behavior, or assert only that something exists, and against fakes that compute their replies with the repository's own code;
 - a `mv` command that moves a file and rewrites imports, with pluggable per-language backends;
 - gate and mover registries so users can add their own;
 - a Claude Code plugin whose hook tells an agent, at each edit, where the edit leaves the file against the watch line, its allowance and the cap, and stops an edit that grows a file over its cap.
 
-Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI publication.
+Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI publication, and a gate that a new test fails against the code before the change: that needs the test runner, and every gate here reads source.
 
 ## 2. Decisions taken
 
@@ -58,6 +59,11 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Absence file set | tree files matched by the gate's own `include` and by a `tests` glob; test paths only; whole tree every run |
 | Absence pairing | none; a test carries its own contrast, and a sibling test asserting a present value does not excuse it |
 | Absence exemptions | live in policy, per test, human-edited, with a reason; no command writes them, and a stale one fails |
+| Own code | `[tool.filepawl] packages` names the repository's top-level import names; absent, they are derived from the tree's non-test Python files |
+| Test-suite gates | built-in, enabled by default, Python only (`ast`): private, mocks, environment, snapshots, test names, existence, fakes; each reads test paths only, whole tree every run |
+| Test-suite site gates | private, mocks, environment, snapshots and fakes report each offending site under its innermost function, and exempt per function, human-edited, with a reason; no command writes them, and a stale one fails |
+| Test-suite test gates | test names and existence judge each test as §6.11 does, and exempt per test, human-edited, with a reason; no command writes them, and a stale one fails |
+| Test-suite heuristics | snapshots fails a literal over `max_items` leaves, default 8; test names fails under `min_words` words, default 3; both are policy |
 | Edit-time notice | `filepawl hook` reads a Claude Code `PreToolUse` payload; it denies an edit that grows a file to over its cap, and warns on any other edit that leaves the file over the watch line or a cap |
 | Plugin | a Claude Code marketplace in this repository with one plugin under `plugin/`; its hook runs the consumer's installed `filepawl`, not a bundled copy |
 
@@ -73,6 +79,7 @@ filepawl/
   hook.py           # the hook command: edit-time notice (§7.1)
   config.py         # load [tool.filepawl], merge defaults, validate
   config_values.py  # typed value checks shared by every policy table
+  config_suite.py   # policy tables of the test-suite gates
   policy_stub.py    # the commented default policy block `init` writes
   state.py          # read/write .filepawl.toml
   tree.py           # git ls-files, include globs, test-path classification
@@ -86,8 +93,18 @@ filepawl/
     returns.py      # key sets of dict-literal returns per function
     named_results.py  # mappings of unnamed shape in return annotations and aliases
     handlers.py     # returns from exception handlers per function
-    absence.py      # tests that assert only an absent value
     registry.py     # built-ins + entry points
+    suite/
+      __init__.py
+      common.py     # own code, own bindings, sites, tests, exemption audit
+      absence.py    # tests that assert only an absent value
+      private.py    # tests that reach private names
+      mocks.py      # tests that patch or mock own code
+      environment.py  # tests that read the host environment
+      snapshots.py  # tests that compare against a golden dump
+      naming.py     # test names that state no behavior
+      existence.py  # tests that assert only that something exists
+      fakes.py      # fakes that compute replies with own code
   movers/
     __init__.py
     base.py         # Mover protocol, shared stale-reference grep
@@ -119,6 +136,7 @@ Dependencies: `tomli-w` in core. `rope` under extra `mv`. No click; argparse.
 [tool.filepawl]
 languages = ["python"]
 tests = ["tests/**"]
+# packages = ["mypkg"]  # own code; derived from the tree when absent (§6.12)
 
 [tool.filepawl.length]
 cap = 500
@@ -174,6 +192,50 @@ include = ["**/*.py"]
 
 [tool.filepawl.absence.exempt]
 # "path::qualified.name" = reason. Human-edited. A test that asserts only an absent value on purpose.
+
+[tool.filepawl.private]
+include = ["**/*.py"]
+
+[tool.filepawl.private.exempt]
+# "path::qualified.name" = reason. Human-edited. A function that reaches a private name on purpose.
+
+[tool.filepawl.mocks]
+include = ["**/*.py"]
+
+[tool.filepawl.mocks.exempt]
+# "path::qualified.name" = reason. Human-edited. A function that patches own code on purpose.
+
+[tool.filepawl.environment]
+include = ["**/*.py"]
+
+[tool.filepawl.environment.exempt]
+# "path::qualified.name" = reason. Human-edited. A function that reads the host environment on purpose.
+
+[tool.filepawl.snapshots]
+include = ["**/*.py"]
+max_items = 8
+
+[tool.filepawl.snapshots.exempt]
+# "path::qualified.name" = reason. Human-edited. A function that compares against a dump on purpose.
+
+[tool.filepawl.test_names]
+include = ["**/*.py"]
+min_words = 3
+
+[tool.filepawl.test_names.exempt]
+# "path::qualified.name" = reason. Human-edited. A test whose name is right as it stands.
+
+[tool.filepawl.existence]
+include = ["**/*.py"]
+
+[tool.filepawl.existence.exempt]
+# "path::qualified.name" = reason. Human-edited. A test whose contract is existence.
+
+[tool.filepawl.fakes]
+include = ["**/*.py"]
+
+[tool.filepawl.fakes.exempt]
+# "path::qualified.name" = reason. Human-edited. A fake that calls own code on purpose.
 
 [tool.filepawl.python]
 include = ["**/*.py"]
@@ -235,7 +297,7 @@ For each directory that contains at least one include-matched file: count the in
 
 ### 6.3 Scope of a run
 
-`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate, the returns gate, the named-results gate, the handlers gate and the absence gate always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
+`filepawl check` with no paths scans `git ls-files` filtered through every language's `include` globs. Paths on argv narrow the length gate's measured set only. The stale audit, the directory gate, the barrels gate, the nesting gate, the returns gate, the named-results gate, the handlers gate and the test-suite gates always run over the whole tree, because a directory count over a subset is meaningless and an exemption audit over a subset calls live entries stale.
 
 `.pre-commit-hooks.yaml` declares the hook with `pass_filenames: false` and `always_run: true`: one hook covers every language, where HQPTuner today needs a `types: [python]` hook and a `types: [javascript]` hook and checks CSS only from `make`. The whole-tree run is one `git ls-files` plus a line count per file, so nothing is saved by narrowing it.
 
@@ -380,6 +442,108 @@ Exemptions live in `[tool.filepawl.absence.exempt]`, keyed `path::qualified.name
 
 No absence finding is fixable by `accept`, and `accept` leaves state unchanged.
 
+### 6.12 Test-suite gates, shared rules
+
+The absence gate and the seven gates after it read a repository's tests for shapes that pass whatever the code does. They share the rules in this section.
+
+Checked files: tree files matched by the gate's own `include` and by a `tests` glob, as in §6.11. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6.
+
+Own code is the set of top-level import names listed in `[tool.filepawl] packages`. When the key is absent, the set is derived from the tree: for each tree file ending `.py` that is not a test path, a leading `src/` segment is dropped, and the name is the first remaining segment, or the file's name without `.py` when one segment remains. `packages = []` declares that the repository has no own code.
+
+An own binding is a name that an import statement anywhere in the checked file binds to own code: `import p` and `import p.m` bind `p`, `import p.m as a` binds `a`, and `from p.m import x as y` binds `y`, where `p` is an own name. A relative import binds no own name, since a test file's relative imports reach other test modules. An expression is own-rooted when it is an own binding or an attribute chain whose root is one. A dotted string is own when its first dotted segment is an own name.
+
+Standard names are resolved through the checked file's imports: `import os` makes `os.getcwd` read as `os.getcwd`, `from os import getcwd` makes `getcwd` read as `os.getcwd`, and `from pathlib import Path` makes `Path.cwd` read as `pathlib.Path.cwd`. An expression's dotted name is its attribute chain with its root so resolved; a root no import binds stands for itself.
+
+A site gate reports sites. A site belongs to the innermost function that contains it, named by qualified name as in §6.7, or to `<module>` when no function contains it; a `lambda` is part of its enclosing function. A unit with sites fails once. Finding: `path::unit: <what> at line N — <fix>`, with `lines N, M` listing every site in source order when there is more than one. Exemptions live in `[tool.filepawl.<gate>.exempt]`, keyed `path::unit`, with a reason. The audit covers every entry on every run and reports each finding under path `pyproject.toml`: an entry whose path is not a checked file, `names no file`; an entry naming no function in its file, `names no function`; an entry whose unit has no site, the gate's own `so it needs no exemption` message.
+
+A test gate judges tests, as §6.11 defines them, and reports each failing test once, exempted and audited as §6.11 does with its own messages.
+
+A consumer adopting these gates decides their findings per repository, as it does directory-gate findings, and sets `packages` when the tree does not show its own code.
+
+No test-suite finding is fixable by `accept`, and `accept` leaves state unchanged.
+
+### 6.13 Private gate
+
+A test that reads a private attribute or imports a private name pins the layout of the code instead of its behavior. A refactor that keeps every behavior breaks it, and a test broken by a refactor has found a defect in itself.
+
+A site gate. A private name begins with `_` and is not a dunder, one that begins and ends with `__`. A name is the file's own when the checked file defines it: as a function or class name, as a plain assignment target, or as the attribute of an attribute assignment target on any object. The named-tuple members `_asdict`, `_replace`, `_fields`, `_field_defaults` and `_make` are public API and are never private. A site is:
+
+- an attribute read or written, `x._name`, whose name is private and not the file's own, unless `x` is the plain name `self` or `cls`;
+- a call to the builtin `getattr`, `setattr`, `delattr` or `hasattr` whose second argument is a string constant naming a private name that is not the file's own;
+- an import of own code whose module path has a private segment or which imports a private name, as in `import p._m`, `from p._m import x` and `from p.m import _x`.
+
+A failing unit is reported as `path::unit: reaches _a, _b at line N — test through the public surface`, the private names listed once each in order of first appearance, and an exemption that excuses nothing as `reaches no private name, so it needs no exemption`.
+
+### 6.14 Mocks gate
+
+A test that replaces the repository's own function with a stub tests the stub. The code under test is exercised against a collaborator that behaves as the test writer believed, not as it does. The fix is a fake at the wire: a fake server speaking the real protocol, a fake file tree, a fake subprocess the test writes.
+
+A site gate. A site is:
+
+- a call to `patch`, or to an attribute chain whose last name is `patch`, whose first argument is an own dotted string;
+- a call to `object`, `dict` or `multiple` on such a chain, as in `patch.object` or `mocker.patch.dict`, whose first argument is own-rooted or an own dotted string;
+- a call to an attribute named `setattr`, `delattr`, `setitem` or `delitem`, the `monkeypatch` forms, whose first argument is own-rooted, or for `setattr` and `delattr` an own dotted string;
+- a call to the builtin `setattr` or `delattr` whose first argument is own-rooted;
+- an assignment or `del` whose target is an attribute chain rooted at an own binding, as in `engine.fetch = fake_fetch`;
+- a call to `Mock`, `MagicMock`, `AsyncMock`, `NonCallableMock` or `NonCallableMagicMock`, bare or as the last name of a chain, with a `spec` or `spec_set` keyword that is own-rooted, and a call to `create_autospec` whose first argument is own-rooted.
+
+Patching a module table or import path to load the unit under test, as in `monkeypatch.setitem(sys.modules, ...)`, is not a site: its first argument is not own code. A failing unit is reported as `path::unit: patches own code at line N — fake at the wire, never over the code`, and an exemption that excuses nothing as `patches no own code, so it needs no exemption`.
+
+### 6.15 Environment gate
+
+A test that reads the host's name, working directory, home, environment variables, locale or time zone, or binds a fixed port, is green on one machine and red on another. The fix is to hand the code the value it needs, through an argument, a fixture that sets it, or a port of 0.
+
+A site gate. A site is, by dotted name as §6.12 resolves it:
+
+- a call to `socket.gethostname`, `socket.getfqdn`, `platform.node`, `platform.uname` or `os.uname`;
+- a call to `os.getcwd`, `os.getcwdb` or `pathlib.Path.cwd`;
+- a call to `pathlib.Path.home` or `os.path.expanduser`, or to any attribute named `expanduser`;
+- any `os.environ` or `os.environb`, and a call to `os.getenv` or `os.getenvb`, except `os.environ` or `os.environb` as the first argument of a call to an attribute named `setitem` or `delitem`, or to `patch.dict` on any chain, which scope a change to the test;
+- a call to any function of `locale`;
+- any `time.tzname`, `time.timezone`, `time.altzone` or `time.daylight`, a call to `time.localtime`, `time.mktime` or `time.ctime`, and a call to an attribute named `astimezone` with no arguments;
+- a call to a name or attribute named `bind`, `connect`, `connect_ex`, `create_connection`, `create_server`, `open_connection` or `start_server`, or whose name ends in `Server` or `Connection`, whose port is an integer constant from 1 to 65535: the second element of a tuple display passed first, the second positional argument, or the `port` keyword.
+
+A failing unit is reported as `path::unit: reads the host environment at line N — hand the code the value it needs`, and an exemption that excuses nothing as `reads no host environment, so it needs no exemption`.
+
+### 6.16 Snapshots gate
+
+A test that compares a whole structure against a stored or written-out copy re-asserts the implementation back at itself. Every harmless change breaks it, the fix is to regenerate the copy, and a regenerated copy has checked nothing. The fix is to compare the fields with known meaning.
+
+A site gate. A site is an `assert` whose test is a single comparison with `==`, either side of which is a dump:
+
+- a dict, list, tuple or set display holding more than `max_items` leaves, default 8: an element that is not a display is one leaf, an empty display is one leaf, a dict's values are counted and its keys are not, and a nested display counts its own leaves;
+- a file read of a golden file: an expression containing a call to `open`, or to an attribute named `read_text` or `read_bytes`, whose arguments or receiver mention `__file__`, `importlib.resources` or a module-level name whose value mentions `__file__`;
+- a plain name that the same function assigns, anywhere before the `assert`, a value holding such a file read;
+- the name `snapshot` or an expression rooted at it, the fixture of snapshot libraries.
+
+A file the test's own run wrote, read back from a temporary directory, is not a golden file. A failing unit is reported as `path::unit: compares against a dump at line N — assert the fields with known meaning`, and an exemption that excuses nothing as `compares against no dump, so it needs no exemption`.
+
+### 6.17 Test-names gate
+
+A test's name is the report its failure files. `test_parse_2` says which function failed, not what broke. The fix is to name the behavior, as in `test_checked_checkbox_parses_true`.
+
+A test gate. A test's words are the parts of its name after the leading `test`, split on `_`, empty parts dropped, and for a method the words of its class name after the leading `Test`, split on `_` and before each capital letter that follows a lower-case letter or digit. A test fails when it has fewer than `min_words` words, default 3, or when its last word is all digits. A failing test is reported as `path::qualified.name: names no behavior — state what the code does, in at least M words, with no number at the end`, and an exemption that excuses nothing as `names a behavior, so it needs no exemption`.
+
+### 6.18 Existence gate
+
+A test whose only claim is that a value exists, not what it is, passes against a stub that returns any value. It pins presence of the result, not behavior. The fix is to assert the value.
+
+A test gate. An existence assertion is an `assert` whose test is:
+
+- a bare name, attribute or subscript, read for its truth;
+- a call to `isinstance`, `issubclass`, `callable`, `hasattr`, `bool` or `len`;
+- a single comparison with `is not` or `!=` that has an absent value (§6.11) on either side;
+- a single comparison `> 0` or `>= 1`, or mirrored, `0 <` or `1 <=`, against any expression;
+- a single `in` comparison whose right side is a call to an attribute named `keys`, or to `vars` or `dir`.
+
+A test fails when it has at least one `assert`, every `assert` it has is an existence assertion or an absence assertion (§6.11), at least one is an existence assertion, and it asserts nothing else, as §6.11 defines asserting something else. A test whose every `assert` is an absence assertion is the absence gate's. A failing test is reported as `path::qualified.name: asserts only that a value exists — a stub returning any value passes it too; assert the value`, and an exemption that excuses nothing as `asserts a value, so it needs no exemption`.
+
+### 6.19 Fakes gate
+
+A fake that works out its reply by calling the code under test is a second copy of that code, wrong together with the first. The fix is a table: the test writes what the fake answers.
+
+A site gate. A fake is a function or class whose name, leading underscores dropped, starts with `fake` or `Fake`, and every function and class in a checked file whose name starts with `fake`. A site is a call, anywhere inside a fake, whose callee is own-rooted and whose last name starts with a lower-case letter or `_`. Constructing an own class, a callee whose last name starts with a capital, is not a site: a fake builds its reply out of own types. A failing unit is reported as `path::unit: computes a reply with own code at line N — answer from a table the test writes`, and an exemption that excuses nothing as `calls no own code, so it needs no exemption`.
+
 ## 7. CLI
 
 ```
@@ -445,6 +609,14 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Named-results gate: each mapping name, bare and subscripted, with `Any` and with `object`, bare and attribute-qualified; a precise value type passes; a loose type inside a value-type union fails and inside a value-type `list` passes; a loose mapping inside `|`, `Optional`, `list`, `tuple`, `Callable`, a nested mapping and a quoted annotation fails; `Literal` items are not read; async functions, nested functions and methods named by qualified name; each alias form, including under `if TYPE_CHECKING:`; a call or string assignment is not an alias; a class-level or function-level alias is not checked; `exclude`, test paths and files outside `include` are not checked; a file that does not parse is skipped.
 - Handlers gate: `return <expr>` and `return None` in `except` and `except*` fail; a bare `return` in a handler passes alone and fails beside a value return, including a `return None`; a return deep in blocks inside a handler counts, and one in `try`, `else` or `finally` outside a handler does not; a nested `def` in a handler is judged on its own, and its value returns do not count toward the outer function; a `lambda` gives the outer function no value return; a name bound in a handler by `=`, annotated or augmented assignment, including inside tuple, list and starred targets, fails when a value return reads it anywhere in its expression, and passes when no value return reads it; attribute and subscript targets bind no name; a handler assignment deep in blocks counts, and one in a nested `def` or class body does not; several failing returns and assignments are listed by line in source order; methods are named by qualified name; test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
 - Absence gate: each absent value, as either side of `==` and `is`, fails alone; `not <expr>` and `len(...) == 0` fail; a tuple of absent values fails and a tuple holding one present value passes; `True`, a non-empty display and a call with arguments are present values; `!=`, `is not`, `in` and a bare expression pass; a test with one present assertion among absent ones passes; `pytest.raises`, `pytest.warns` and an `assert*` method call count as asserting something else; a test with no `assert` passes; an `assert` in a nested `def` is not the test's; `Test` class methods are named by qualified name and methods of other classes are not tests; non-test paths and files outside `include` are not checked; a file that does not parse is skipped; exemption and each audit message.
+- Own code: derived from the tree's non-test Python files, root modules and `src/` layout included; `packages` replaces the derived set, and `packages = []` leaves none.
+- Private gate: a private attribute read and write, a builtin `getattr` family call, a private module segment and a private imported name each fail; `self` and `cls` receivers, dunders, named-tuple members and names the file defines pass; a third-party private import passes; sites at module level report under `<module>`; several sites list their names and lines; exemption and each audit message.
+- Mocks gate: each patch form with an own target fails and with a third-party target passes; `monkeypatch.setattr` in its string and object forms; `sys.modules` patching passes; attribute assignment and `del` on an own binding fail; `Mock` with an own `spec` and `create_autospec` of own code fail; a relative import binds no own name; exemption and each audit message.
+- Environment gate: each named call and read fails, reached through `import x`, `from x import y` and an alias; `os.environ` inside `setitem`, `delitem` and `patch.dict` passes; `astimezone` with an argument passes; each port form fails at a fixed port and passes at 0; exemption and each audit message.
+- Snapshots gate: a display at `max_items` leaves passes and one over fails; dict keys do not count; a golden read through `__file__` directly, through a module-level name and through a local name fails; a read of a temporary file passes; `snapshot` fails; `!=` is not read; exemption and each audit message.
+- Test-names gate: fewer than `min_words` words fails; a trailing number fails; a class name's words count for a method; exemption and each audit message.
+- Existence gate: each existence form fails alone and beside absence assertions; an existence assertion beside a value assertion passes; all-absence tests are left to the absence gate; `pytest.raises` counts as asserting something else; exemption and each audit message.
+- Fakes gate: a fake by name and by file name; a lower-case own callee fails and a capitalised one passes; a third-party call passes; a call outside a fake passes; exemption and each audit message.
 - `accept`: adds, lowers, refuses to raise, drops stale, preserves reason, stable sort.
 - `init`: fresh tree, refuses overwrite, appends policy stub once.
 - `mv`: `command` backend with a fake script; `rope` backend behind `pytest.importorskip("rope")`; stale-ref grep finds a `mock.patch` string.
