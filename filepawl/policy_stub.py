@@ -87,6 +87,13 @@ DEFAULT_POLICY_STUB = (
             '# "path::qualified.name" = reason. Human-edited. A test whose '
             "contract is existence.",
             "",
+            "[tool.filepawl.claims]",
+            'include = ["**/*.py"]',
+            "",
+            "[tool.filepawl.claims.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A test whose '
+            "claims stand together on purpose.",
+            "",
             "[tool.filepawl.private]",
             'include = ["**/*.py"]',
             "",
