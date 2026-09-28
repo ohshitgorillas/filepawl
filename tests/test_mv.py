@@ -83,13 +83,19 @@ def test_command_backend_runs_the_template_and_records_its_argv(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 0
+    code = main(["mv", "pkg/a.py", "pkg/b.py"])
 
     argv = (root / "bin" / "argv.log").read_text(encoding="utf-8").split()
-    assert argv == ["pkg/a.py", "pkg/b.py"]
-    assert not (root / "pkg" / "a.py").exists()
-    assert (root / "pkg" / "b.py").read_text(encoding="utf-8") == "X = 1\n"
-    assert capsys.readouterr().out.splitlines()[-1] == "0 stale references"
+    old_left = (root / "pkg" / "a.py").exists()
+    moved = (root / "pkg" / "b.py").read_text(encoding="utf-8")
+    last = capsys.readouterr().out.splitlines()[-1]
+    assert (code, argv, old_left, moved, last) == (
+        0,
+        ["pkg/a.py", "pkg/b.py"],
+        False,
+        "X = 1\n",
+        "0 stale references",
+    )
 
 
 def test_command_backend_non_zero_exit_is_a_config_error(
@@ -107,8 +113,8 @@ def test_command_backend_non_zero_exit_is_a_config_error(
         main(["mv", "pkg/a.py", "pkg/b.py"])
 
     err = capsys.readouterr().err
-    assert "exit 3" in err
-    assert (root / "pkg" / "a.py").exists()
+    kept = (root / "pkg" / "a.py").exists()
+    assert ("exit 3" in err, kept) == (True, True)
 
 
 def test_command_backend_rejects_an_unknown_placeholder(
@@ -128,8 +134,8 @@ def test_command_backend_rejects_an_unknown_placeholder(
         main(["mv", "pkg/a.py", "pkg/b.py"])
 
     err = capsys.readouterr().err
-    assert "sh bin/move.sh {other}" in err
-    assert (root / "pkg" / "a.py").exists()
+    kept = (root / "pkg" / "a.py").exists()
+    assert ("sh bin/move.sh {other}" in err, kept) == (True, True)
 
 
 def test_command_backend_shell_quotes_the_paths(
@@ -153,12 +159,12 @@ def test_command_backend_shell_quotes_the_paths(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", old, new]) == 0
+    code = main(["mv", old, new])
 
     argv = (root / "bin" / "argv.log").read_text(encoding="utf-8").splitlines()
-    assert argv == [old, new]
-    assert (root / new).read_text(encoding="utf-8") == "X = 1\n"
-    assert not (root / old).exists()
+    moved = (root / new).read_text(encoding="utf-8")
+    old_left = (root / old).exists()
+    assert (code, argv, moved, old_left) == (0, [old, new], "X = 1\n", False)
     capsys.readouterr()
 
 
@@ -188,11 +194,16 @@ def test_no_mover_falls_back_to_git_mv(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/sub/a.py"]) == 0
+    code = main(["mv", "pkg/a.py", "pkg/sub/a.py"])
 
-    assert "pkg/sub/a.py" in tracked(root)
-    assert "pkg/a.py" not in tracked(root)
-    assert capsys.readouterr().out.splitlines() == ["0 stale references"]
+    files = tracked(root)
+    out = capsys.readouterr().out.splitlines()
+    assert (code, "pkg/sub/a.py" in files, "pkg/a.py" not in files, out) == (
+        0,
+        True,
+        True,
+        ["0 stale references"],
+    )
 
 
 def test_git_mv_failure_exits_two(
@@ -216,9 +227,10 @@ def test_git_mv_on_an_untracked_old_path_exits_two(
     with pytest.raises(SystemExit, match="^2$"):
         main(["mv", "pkg/loose.py", "pkg/moved.py"])
 
-    assert "git mv" in capsys.readouterr().err
-    assert (root / "pkg" / "loose.py").exists()
-    assert not (root / "pkg" / "moved.py").exists()
+    err = capsys.readouterr().err
+    kept = (root / "pkg" / "loose.py").exists()
+    moved = (root / "pkg" / "moved.py").exists()
+    assert ("git mv" in err, kept, moved) == (True, True, False)
 
 
 def test_unmatched_old_path_exits_two(
@@ -257,13 +269,17 @@ def test_stale_refs_report_dotted_and_literal_hits_with_a_count(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/mod.py", "pkg/sub/mod.py"]) == 0
+    code = main(["mv", "pkg/mod.py", "pkg/sub/mod.py"])
 
-    assert capsys.readouterr().out.splitlines() == [
-        'tests/test_x.py:3: with mock.patch("pkg.mod.fn"):',
-        'tools/paths.py:1: PATHS = ["pkg/mod.py"]',
-        "2 stale references",
-    ]
+    out = capsys.readouterr().out.splitlines()
+    assert (code, out) == (
+        0,
+        [
+            'tests/test_x.py:3: with mock.patch("pkg.mod.fn"):',
+            'tools/paths.py:1: PATHS = ["pkg/mod.py"]',
+            "2 stale references",
+        ],
+    )
 
 
 # --- allowance state ---------------------------------------------------
@@ -286,11 +302,13 @@ def test_allowance_entry_moves_to_the_new_path(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/sub/a.py"]) == 0
+    code = main(["mv", "pkg/a.py", "pkg/sub/a.py"])
 
-    assert allowance_of(root) == {
-        "pkg/sub/a.py": {"lines": 444, "reason": "kept whole"}
-    }
+    allowance = allowance_of(root)
+    assert (code, allowance) == (
+        0,
+        {"pkg/sub/a.py": {"lines": 444, "reason": "kept whole"}},
+    )
     capsys.readouterr()
 
 
@@ -306,10 +324,11 @@ def test_state_file_untouched_when_there_is_no_entry(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/b.py"]) == 0
+    code = main(["mv", "pkg/a.py", "pkg/b.py"])
 
     moved = (root / "pkg/b.py").read_text(encoding="utf-8")
-    assert (moved, (root / STATE_FILE).exists()) == ("X = 1\n", False)
+    state_exists = (root / STATE_FILE).exists()
+    assert (code, moved, state_exists) == (0, "X = 1\n", False)
     capsys.readouterr()
 
 
@@ -332,8 +351,9 @@ def test_rope_missing_prints_the_install_line(
     with pytest.raises(SystemExit, match="^2$"):
         main(["mv", "pkg/a.py", "pkg/sub/a.py"])
 
-    assert "pip install 'filepawl[mv]'" in capsys.readouterr().err
-    assert (root / "pkg" / "a.py").exists()
+    err = capsys.readouterr().err
+    kept = (root / "pkg" / "a.py").exists()
+    assert ("pip install 'filepawl[mv]'" in err, kept) == (True, True)
 
 
 def test_rope_refuses_a_destination_that_is_not_a_package(
@@ -353,9 +373,10 @@ def test_rope_refuses_a_destination_that_is_not_a_package(
     with pytest.raises(SystemExit, match="^2$"):
         main(["mv", "pkg/a.py", "plain/a.py"])
 
-    assert "plain: not a package" in capsys.readouterr().err
-    assert (root / "pkg" / "a.py").exists()
-    assert not (root / "plain" / "a.py").exists()
+    err = capsys.readouterr().err
+    kept = (root / "pkg" / "a.py").exists()
+    moved = (root / "plain" / "a.py").exists()
+    assert ("plain: not a package" in err, kept, moved) == (True, True, False)
 
 
 def test_rope_refuses_a_destination_directory_that_does_not_exist(
@@ -374,8 +395,9 @@ def test_rope_refuses_a_destination_directory_that_does_not_exist(
     with pytest.raises(SystemExit, match="^2$"):
         main(["mv", "pkg/a.py", "pkg/sub/a.py"])
 
-    assert "pkg/sub: not a package" in capsys.readouterr().err
-    assert not (root / "pkg" / "sub").exists()
+    err = capsys.readouterr().err
+    created = (root / "pkg" / "sub").exists()
+    assert ("pkg/sub: not a package" in err, created) == (True, False)
 
 
 def test_rope_backend_moves_the_module_and_rewrites_imports(
@@ -393,13 +415,19 @@ def test_rope_backend_moves_the_module_and_rewrites_imports(
     )
     monkeypatch.chdir(root)
 
-    assert main(["mv", "pkg/a.py", "pkg/sub/a.py"]) == 0
+    code = main(["mv", "pkg/a.py", "pkg/sub/a.py"])
 
-    assert (root / "pkg" / "sub" / "a.py").read_text(encoding="utf-8") == "X = 1\n"
-    assert not (root / "pkg" / "a.py").exists()
+    moved = (root / "pkg" / "sub" / "a.py").read_text(encoding="utf-8")
+    old_left = (root / "pkg" / "a.py").exists()
     body = (root / "pkg" / "b.py").read_text(encoding="utf-8")
-    assert "import pkg.sub.a" in body
-    assert not (root / ".ropeproject").exists()
+    rope_left = (root / ".ropeproject").exists()
+    assert (code, moved, old_left, "import pkg.sub.a" in body, rope_left) == (
+        0,
+        "X = 1\n",
+        False,
+        True,
+        False,
+    )
     capsys.readouterr()
 
 
@@ -409,9 +437,11 @@ def test_rope_backend_moves_the_module_and_rewrites_imports(
 def test_builtin_movers_are_registered_by_name() -> None:
     movers = registry.discover_movers()
 
-    assert set(movers) >= {"rope", "command"}
-    assert movers["rope"].__name__ == "RopeMover"
-    assert movers["command"].__name__ == "CommandMover"
+    assert (
+        set(movers) >= {"rope", "command"},
+        movers["rope"].__name__,
+        movers["command"].__name__,
+    ) == (True, "RopeMover", "CommandMover")
 
 
 def _write(path: Path, content: str) -> None:

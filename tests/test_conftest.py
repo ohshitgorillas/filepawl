@@ -22,7 +22,6 @@ def test_repo_stages_files(repo: Callable[[dict[str, str | int]], Path]) -> None
         text=True,
     )
     tracked = set(result.stdout.split())
-    assert tracked == {"a.py", "tests/t.py"}
 
     status = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -31,21 +30,19 @@ def test_repo_stages_files(repo: Callable[[dict[str, str | int]], Path]) -> None
         capture_output=True,
         text=True,
     )
-    assert status.stdout == ""
+    assert (tracked, status.stdout) == ({"a.py", "tests/t.py"}, "")
 
 
 def test_repo_writes_int_as_that_many_lines(
     repo: Callable[[dict[str, str | int]], Path],
 ) -> None:
     root = repo({"a.py": 10, "b.py": 3})
-    assert (root / "a.py").read_text(encoding="utf-8").splitlines() == [
-        f"line {n}" for n in range(1, 11)
-    ]
-    assert (root / "b.py").read_text(encoding="utf-8").splitlines() == [
-        "line 1",
-        "line 2",
-        "line 3",
-    ]
+    a_lines = (root / "a.py").read_text(encoding="utf-8").splitlines()
+    b_lines = (root / "b.py").read_text(encoding="utf-8").splitlines()
+    assert (a_lines, b_lines) == (
+        [f"line {n}" for n in range(1, 11)],
+        ["line 1", "line 2", "line 3"],
+    )
 
 
 def test_repo_writes_string_content_verbatim(

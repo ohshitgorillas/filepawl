@@ -46,8 +46,14 @@ def test_check_on_a_clean_tree_is_silent_and_exits_zero(
     captured = capsys.readouterr()
     (root / "pkg/a.py").write_text("line\n" * (WATCH + 1), encoding="utf-8")
     grown = main(["check"])
-    assert (status, captured.out, captured.err, grown) == (0, "", "", 1)
-    assert capsys.readouterr().out.endswith("filepawl accept pkg/a.py\n")
+    grown_out = capsys.readouterr().out
+    assert (
+        status,
+        captured.out,
+        captured.err,
+        grown,
+        grown_out.endswith("filepawl accept pkg/a.py\n"),
+    ) == (0, "", "", 1, True)
 
 
 def test_check_prints_findings_sorted_then_the_accept_command(
@@ -55,14 +61,18 @@ def test_check_prints_findings_sorted_then_the_accept_command(
 ) -> None:
     root = repo({"b.py": WATCH + 1, "a.py": WATCH + 1})
     monkeypatch.chdir(root)
-    assert main(["check"]) == 1
-    assert capsys.readouterr().out.splitlines() == [
-        f"a.py: over watch line {WATCH} ({WATCH + 1} lines); "
-        "run `filepawl accept a.py`",
-        f"b.py: over watch line {WATCH} ({WATCH + 1} lines); "
-        "run `filepawl accept b.py`",
-        "filepawl accept a.py b.py",
-    ]
+    status = main(["check"])
+    lines = capsys.readouterr().out.splitlines()
+    assert (status, lines) == (
+        1,
+        [
+            f"a.py: over watch line {WATCH} ({WATCH + 1} lines); "
+            "run `filepawl accept a.py`",
+            f"b.py: over watch line {WATCH} ({WATCH + 1} lines); "
+            "run `filepawl accept b.py`",
+            "filepawl accept a.py b.py",
+        ],
+    )
 
 
 def test_check_sorts_two_findings_for_one_path_by_message(
@@ -70,13 +80,17 @@ def test_check_sorts_two_findings_for_one_path_by_message(
 ) -> None:
     root = repo({"a.py": CAP + 1})
     monkeypatch.chdir(root)
-    assert main(["check"]) == 1
-    assert capsys.readouterr().out.splitlines() == [
-        f"a.py: over cap {CAP} ({CAP + 1} lines); split it",
-        f"a.py: over watch line {WATCH} ({CAP + 1} lines); "
-        "run `filepawl accept a.py`",
-        "filepawl accept a.py",
-    ]
+    status = main(["check"])
+    lines = capsys.readouterr().out.splitlines()
+    assert (status, lines) == (
+        1,
+        [
+            f"a.py: over cap {CAP} ({CAP + 1} lines); split it",
+            f"a.py: over watch line {WATCH} ({CAP + 1} lines); "
+            "run `filepawl accept a.py`",
+            "filepawl accept a.py",
+        ],
+    )
 
 
 def test_check_prints_bare_accept_when_only_stale_entries_are_fixable(
@@ -85,11 +99,15 @@ def test_check_prints_bare_accept_when_only_stale_entries_are_fixable(
     root = repo({"a.py": 10})
     write_state_text(root, 'version = 1\n\n[allowance]\n"gone.py" = { lines = 450 }\n')
     monkeypatch.chdir(root)
-    assert main(["check"]) == 1
-    assert capsys.readouterr().out.splitlines() == [
-        "gone.py: allowance names a path outside the tree; drop it",
-        "filepawl accept",
-    ]
+    status = main(["check"])
+    lines = capsys.readouterr().out.splitlines()
+    assert (status, lines) == (
+        1,
+        [
+            "gone.py: allowance names a path outside the tree; drop it",
+            "filepawl accept",
+        ],
+    )
 
 
 def test_check_path_argument_narrows_the_measured_set(
@@ -97,13 +115,16 @@ def test_check_path_argument_narrows_the_measured_set(
 ) -> None:
     root = repo({"a.py": WATCH + 1, "b.py": WATCH + 1})
     monkeypatch.chdir(root)
-    assert main(["check", "a.py"]) == 1
+    status = main(["check", "a.py"])
     lines = capsys.readouterr().out.splitlines()
-    assert lines == [
-        f"a.py: over watch line {WATCH} ({WATCH + 1} lines); "
-        "run `filepawl accept a.py`",
-        "filepawl accept a.py",
-    ]
+    assert (status, lines) == (
+        1,
+        [
+            f"a.py: over watch line {WATCH} ({WATCH + 1} lines); "
+            "run `filepawl accept a.py`",
+            "filepawl accept a.py",
+        ],
+    )
 
 
 def test_check_dot_path_means_the_whole_tree(
@@ -111,8 +132,9 @@ def test_check_dot_path_means_the_whole_tree(
 ) -> None:
     root = repo({"a.py": WATCH + 1, "b.py": WATCH + 1})
     monkeypatch.chdir(root)
-    assert main(["check", "."]) == 1
-    assert capsys.readouterr().out.splitlines()[-1] == "filepawl accept a.py b.py"
+    status = main(["check", "."])
+    last = capsys.readouterr().out.splitlines()[-1]
+    assert (status, last) == (1, "filepawl accept a.py b.py")
 
 
 def test_check_path_outside_the_repository_exits_two(
@@ -123,8 +145,10 @@ def test_check_path_outside_the_repository_exits_two(
     with pytest.raises(SystemExit, match="^2$"):
         main(["check", "/etc"])
     err = capsys.readouterr().err
-    assert err.startswith("filepawl: ")
-    assert "outside the repository" in err
+    assert (err.startswith("filepawl: "), "outside the repository" in err) == (
+        True,
+        True,
+    )
 
 
 def test_check_exits_two_on_an_unparseable_state_file(
@@ -136,8 +160,7 @@ def test_check_exits_two_on_an_unparseable_state_file(
     with pytest.raises(SystemExit, match="^2$"):
         main(["check"])
     err = capsys.readouterr().err
-    assert err.startswith("filepawl: ")
-    assert "unparseable TOML" in err
+    assert (err.startswith("filepawl: "), "unparseable TOML" in err) == (True, True)
 
 
 def test_check_exits_two_on_an_unknown_mover(
@@ -155,8 +178,7 @@ def test_check_exits_two_on_an_unknown_mover(
     with pytest.raises(SystemExit, match="^2$"):
         main(["check"])
     err = capsys.readouterr().err
-    assert err.startswith("filepawl: ")
-    assert "unknown mover" in err
+    assert (err.startswith("filepawl: "), "unknown mover" in err) == (True, True)
 
 
 def test_check_accepts_a_known_mover_name(
@@ -171,14 +193,15 @@ def test_check_accepts_a_known_mover_name(
         }
     )
     monkeypatch.chdir(root)
-    assert main(["check"]) == 0
-    assert capsys.readouterr().out == ""
+    status = main(["check"])
+    out = capsys.readouterr().out
     pyproject = root / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
     pyproject.write_text(text.replace('"command"', '"nosuch"'), encoding="utf-8")
     with pytest.raises(SystemExit, match="^2$"):
         main(["check"])
-    assert "unknown mover" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert (status, out, "unknown mover" in err) == (0, "", True)
 
 
 # --- accept ------------------------------------------------------------
@@ -189,9 +212,9 @@ def test_accept_adds_a_missing_entry_and_exits_zero(
 ) -> None:
     root = repo({"a.py": WATCH + 1})
     monkeypatch.chdir(root)
-    assert main(["accept"]) == 0
-    assert capsys.readouterr().out == ""
-    assert allowance_of(root) == {"a.py": {"lines": WATCH + 1}}
+    status = main(["accept"])
+    out = capsys.readouterr().out
+    assert (status, out, allowance_of(root)) == (0, "", {"a.py": {"lines": WATCH + 1}})
 
 
 def test_accept_does_not_rewrite_an_unchanged_state_file(
@@ -201,8 +224,9 @@ def test_accept_does_not_rewrite_an_unchanged_state_file(
     text = f'version = 1\n[allowance]\n"a.py" = {{lines = {WATCH + 1}}}\n'
     write_state_text(root, text)
     monkeypatch.chdir(root)
-    assert main(["accept"]) == 0
-    assert (root / STATE_FILE).read_text(encoding="utf-8") == text
+    status = main(["accept"])
+    after = (root / STATE_FILE).read_text(encoding="utf-8")
+    assert (status, after) == (0, text)
 
 
 def test_accept_narrowed_to_one_path_leaves_the_other_pending(
@@ -210,15 +234,22 @@ def test_accept_narrowed_to_one_path_leaves_the_other_pending(
 ) -> None:
     root = repo({"a.py": WATCH + 1, "b.py": WATCH + 1})
     monkeypatch.chdir(root)
-    assert main(["accept", "a.py"]) == 0
-    assert capsys.readouterr().out == ""
-    assert allowance_of(root) == {"a.py": {"lines": WATCH + 1}}
-    assert main(["check"]) == 1
-    assert capsys.readouterr().out.splitlines() == [
-        f"b.py: over watch line {WATCH} ({WATCH + 1} lines); "
-        "run `filepawl accept b.py`",
-        "filepawl accept b.py",
-    ]
+    accepted = main(["accept", "a.py"])
+    accept_out = capsys.readouterr().out
+    allowance = allowance_of(root)
+    checked = main(["check"])
+    check_lines = capsys.readouterr().out.splitlines()
+    assert (accepted, accept_out, allowance, checked, check_lines) == (
+        0,
+        "",
+        {"a.py": {"lines": WATCH + 1}},
+        1,
+        [
+            f"b.py: over watch line {WATCH} ({WATCH + 1} lines); "
+            "run `filepawl accept b.py`",
+            "filepawl accept b.py",
+        ],
+    )
 
 
 def test_accept_of_a_grown_file_reports_it_and_exits_one(
@@ -227,11 +258,13 @@ def test_accept_of_a_grown_file_reports_it_and_exits_one(
     root = repo({"a.py": 450})
     write_state_text(root, 'version = 1\n\n[allowance]\n"a.py" = { lines = 420 }\n')
     monkeypatch.chdir(root)
-    assert main(["accept"]) == 1
-    assert capsys.readouterr().out.splitlines() == [
-        "a.py: grew past allowance (450 > 420); split it"
-    ]
-    assert allowance_of(root) == {"a.py": {"lines": 420}}
+    status = main(["accept"])
+    lines = capsys.readouterr().out.splitlines()
+    assert (status, lines, allowance_of(root)) == (
+        1,
+        ["a.py: grew past allowance (450 > 420); split it"],
+        {"a.py": {"lines": 420}},
+    )
 
 
 def test_accept_drops_a_stale_entry(
@@ -241,9 +274,14 @@ def test_accept_drops_a_stale_entry(
     write_state_text(root, 'version = 1\n\n[allowance]\n"gone.py" = { lines = 450 }\n')
     monkeypatch.chdir(root)
     before = allowance_of(root)
-    assert main(["accept"]) == 0
-    assert capsys.readouterr().out == ""
-    assert (before, allowance_of(root)) == ({"gone.py": {"lines": 450}}, {})
+    status = main(["accept"])
+    out = capsys.readouterr().out
+    assert (before, status, out, allowance_of(root)) == (
+        {"gone.py": {"lines": 450}},
+        0,
+        "",
+        {},
+    )
 
 
 def test_accept_reason_sets_the_reason_on_that_entry(
@@ -251,10 +289,11 @@ def test_accept_reason_sets_the_reason_on_that_entry(
 ) -> None:
     root = repo({"a.py": WATCH + 1})
     monkeypatch.chdir(root)
-    assert main(["accept", "a.py", "--reason", "line record plus its readers"]) == 0
-    assert allowance_of(root) == {
-        "a.py": {"lines": WATCH + 1, "reason": "line record plus its readers"}
-    }
+    status = main(["accept", "a.py", "--reason", "line record plus its readers"])
+    assert (status, allowance_of(root)) == (
+        0,
+        {"a.py": {"lines": WATCH + 1, "reason": "line record plus its readers"}},
+    )
 
 
 def test_accept_reason_without_a_path_exits_two(
@@ -265,9 +304,11 @@ def test_accept_reason_without_a_path_exits_two(
     with pytest.raises(SystemExit, match="^2$"):
         main(["accept", "--reason", "why"])
     err = capsys.readouterr().err
-    assert err.startswith("filepawl: ")
-    assert "--reason" in err
-    assert not (root / STATE_FILE).exists()
+    assert (
+        err.startswith("filepawl: "),
+        "--reason" in err,
+        (root / STATE_FILE).exists(),
+    ) == (True, True, False)
 
 
 def test_accept_reason_with_two_paths_exits_two(
@@ -277,8 +318,8 @@ def test_accept_reason_with_two_paths_exits_two(
     monkeypatch.chdir(root)
     with pytest.raises(SystemExit, match="^2$"):
         main(["accept", "a.py", "b.py", "--reason", "why"])
-    assert "--reason" in capsys.readouterr().err
-    assert not (root / STATE_FILE).exists()
+    err = capsys.readouterr().err
+    assert ("--reason" in err, (root / STATE_FILE).exists()) == (True, False)
 
 
 def test_accept_reason_for_a_path_with_no_entry_exits_two(
@@ -289,30 +330,39 @@ def test_accept_reason_for_a_path_with_no_entry_exits_two(
     with pytest.raises(SystemExit, match="^2$"):
         main(["accept", "a.py", "--reason", "why"])
     err = capsys.readouterr().err
-    assert err.startswith("filepawl: ")
-    assert "no allowance entry" in err
+    assert (err.startswith("filepawl: "), "no allowance entry" in err) == (True, True)
 
 
 # --- init --------------------------------------------------------------
 
 
-def test_init_writes_state_and_appends_the_policy_stub_once(
+def test_init_writes_state_and_the_policy_stub(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = repo({"a.py": WATCH + 1, "pyproject.toml": PYPROJECT})
     monkeypatch.chdir(root)
-    assert main(["init"]) == 0
-    assert allowance_of(root) == {"a.py": {"lines": WATCH + 1}}
-
+    status = main(["init"])
+    allowance = allowance_of(root)
     text = (root / "pyproject.toml").read_text(encoding="utf-8")
-    assert text.startswith(PYPROJECT)
-    assert "# [tool.filepawl]" in text
-    assert tomllib.loads(text) == tomllib.loads(PYPROJECT)
+    assert (
+        status,
+        allowance,
+        text.startswith(PYPROJECT),
+        "# [tool.filepawl]" in text,
+        tomllib.loads(text),
+    ) == (0, {"a.py": {"lines": WATCH + 1}}, True, True, tomllib.loads(PYPROJECT))
 
+
+def test_init_appends_the_policy_stub_once(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repo({"a.py": WATCH + 1, "pyproject.toml": PYPROJECT})
+    monkeypatch.chdir(root)
+    first = main(["init"])
     (root / STATE_FILE).unlink()
-    assert main(["init"]) == 0
+    second = main(["init"])
     again = (root / "pyproject.toml").read_text(encoding="utf-8")
-    assert again.count("# [tool.filepawl]") == 1
+    assert (first, second, again.count("# [tool.filepawl]")) == (0, 0, 1)
 
 
 def test_init_refuses_an_existing_state_file(
@@ -320,12 +370,11 @@ def test_init_refuses_an_existing_state_file(
 ) -> None:
     root = repo({"a.py": 10, "pyproject.toml": PYPROJECT})
     monkeypatch.chdir(root)
-    assert main(["init"]) == 0
+    status = main(["init"])
     with pytest.raises(SystemExit, match="^2$"):
         main(["init"])
     err = capsys.readouterr().err
-    assert err.startswith("filepawl: ")
-    assert STATE_FILE in err
+    assert (status, err.startswith("filepawl: "), STATE_FILE in err) == (0, True, True)
 
 
 def test_init_creates_pyproject_when_it_is_missing(
@@ -333,10 +382,9 @@ def test_init_creates_pyproject_when_it_is_missing(
 ) -> None:
     root = repo({"a.py": 10})
     monkeypatch.chdir(root)
-    assert main(["init"]) == 0
+    status = main(["init"])
     text = (root / "pyproject.toml").read_text(encoding="utf-8")
-    assert "# [tool.filepawl]" in text
-    assert tomllib.loads(text) == {}
+    assert (status, "# [tool.filepawl]" in text, tomllib.loads(text)) == (0, True, {})
 
 
 def test_init_leaves_pyproject_alone_when_tool_filepawl_is_present(
@@ -345,8 +393,9 @@ def test_init_leaves_pyproject_alone_when_tool_filepawl_is_present(
     configured = PYPROJECT + '\n[tool.filepawl]\ntests = ["tests/**"]\n'
     root = repo({"a.py": 10, "pyproject.toml": configured})
     monkeypatch.chdir(root)
-    assert main(["init"]) == 0
-    assert (root / "pyproject.toml").read_text(encoding="utf-8") == configured
+    status = main(["init"])
+    text = (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert (status, text) == (0, configured)
 
 
 # --- no subcommand ------------------------------------------------------
@@ -358,7 +407,6 @@ def test_no_subcommand_prints_usage_and_exits_two(
 ) -> None:
     root = repo({"a.py": 10})
     monkeypatch.chdir(root)
-    assert main([]) == 2
+    status = main([])
     captured = capsys.readouterr()
-    assert "usage: filepawl" in captured.err
-    assert captured.out == ""
+    assert (status, "usage: filepawl" in captured.err, captured.out) == (2, True, "")

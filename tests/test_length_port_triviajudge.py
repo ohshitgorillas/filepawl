@@ -88,10 +88,10 @@ def test_a_source_file_over_the_cap_is_named_with_its_length_and_the_cap(
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
     cap_findings = [f for f in findings if "over cap" in f.message]
-    assert messages(cap_findings) == [
-        ("pkg/over_the_cap.py", f"over cap {CAP} ({CAP + 1} lines); split it")
-    ]
-    assert cap_findings[0].fixable_by_accept is False
+    assert (messages(cap_findings), cap_findings[0].fixable_by_accept) == (
+        [("pkg/over_the_cap.py", f"over cap {CAP} ({CAP + 1} lines); split it")],
+        False,
+    )
 
 
 def test_a_test_file_past_the_source_cap_is_held_to_the_wider_test_cap(
@@ -118,13 +118,15 @@ def test_a_test_file_over_the_test_cap_is_named_with_its_length_and_the_test_cap
     root = repo({"tests/test_over_the_cap.py": CAP_TESTS + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert messages(findings) == [
-        (
-            "tests/test_over_the_cap.py",
-            f"test over cap {CAP_TESTS} ({CAP_TESTS + 1} lines)",
-        )
-    ]
-    assert findings[0].fixable_by_accept is False
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [
+            (
+                "tests/test_over_the_cap.py",
+                f"test over cap {CAP_TESTS} ({CAP_TESTS + 1} lines)",
+            )
+        ],
+        False,
+    )
 
 
 # --- behavior 2: above watch line source file carries entry, only shrinks ---
@@ -152,14 +154,16 @@ def test_a_watched_file_with_no_entry_is_told_the_length_to_write_down(
     root = repo({"pkg/watched.py": WATCH + 37})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert messages(findings) == [
-        (
-            "pkg/watched.py",
-            f"over watch line {WATCH} ({WATCH + 37} lines); "
-            "run `filepawl accept pkg/watched.py`",
-        )
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [
+            (
+                "pkg/watched.py",
+                f"over watch line {WATCH} ({WATCH + 37} lines); "
+                "run `filepawl accept pkg/watched.py`",
+            )
+        ],
+        True,
+    )
 
 
 def test_a_watched_file_at_the_length_its_entry_permits_passes(repo: Repo) -> None:
@@ -185,10 +189,10 @@ def test_a_watched_file_over_its_entry_is_measured_against_the_entry(
     pol = policy()
     state = state_for({"pkg/watched.py": Entry(lines=421)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("pkg/watched.py", "grew past allowance (450 > 421); split it")
-    ]
-    assert findings[0].fixable_by_accept is False
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("pkg/watched.py", "grew past allowance (450 > 421); split it")],
+        False,
+    )
 
 
 def test_a_watched_file_under_its_entry_is_told_the_length_to_lower_it_to(
@@ -203,13 +207,15 @@ def test_a_watched_file_under_its_entry_is_told_the_length_to_lower_it_to(
     pol = policy()
     state = state_for({"pkg/watched.py": Entry(lines=455)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        (
-            "pkg/watched.py",
-            "shrank (412 < 455); run `filepawl accept pkg/watched.py`",
-        )
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [
+            (
+                "pkg/watched.py",
+                "shrank (412 < 455); run `filepawl accept pkg/watched.py`",
+            )
+        ],
+        True,
+    )
 
 
 def test_the_ratchet_does_not_reach_a_test_file_over_the_watch_line(
@@ -255,10 +261,10 @@ def test_an_entry_naming_no_file_is_refused_by_its_key(repo: Repo) -> None:
     pol = policy()
     state = state_for({"pkg/gone.py": Entry(lines=430)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("pkg/gone.py", "allowance names a path outside the tree; drop it")
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("pkg/gone.py", "allowance names a path outside the tree; drop it")],
+        True,
+    )
 
 
 def test_an_entry_naming_a_test_path_is_refused_as_ungoverned(repo: Repo) -> None:
@@ -271,10 +277,10 @@ def test_an_entry_naming_a_test_path_is_refused_as_ungoverned(repo: Repo) -> Non
     pol = policy()
     state = state_for({"tests/test_watched.py": Entry(lines=430)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("tests/test_watched.py", "allowance names a test path; drop it")
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("tests/test_watched.py", "allowance names a test path; drop it")],
+        True,
+    )
 
 
 def test_an_entry_whose_file_fell_under_the_watch_line_is_refused_as_droppable(
@@ -289,10 +295,10 @@ def test_an_entry_whose_file_fell_under_the_watch_line_is_refused_as_droppable(
     pol = policy()
     state = state_for({"pkg/shrunk.py": Entry(lines=430)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("pkg/shrunk.py", f"back under watch line {WATCH}; drop it")
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("pkg/shrunk.py", f"back under watch line {WATCH}; drop it")],
+        True,
+    )
 
 
 # --- behavior 4: argv names files and module's table governs ---------------
@@ -325,14 +331,21 @@ def test_the_command_line_reports_every_rule_the_file_it_names_breaks(
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
     # Both cap and ratchet violations fire independently on the same file.
-    assert len(findings) == 2
-    assert [f.path for f in findings] == ["pkg/named.py", "pkg/named.py"]
     cap_msgs = [f.message for f in findings if "over cap" in f.message]
     watch_msgs = [f.message for f in findings if "over watch line" in f.message]
-    assert len(cap_msgs) == 1
-    assert len(watch_msgs) == 1
-    assert cap_msgs[0] == f"over cap {CAP} ({CAP + 1} lines); split it"
     assert (
-        watch_msgs[0] == f"over watch line {WATCH} ({CAP + 1} lines); "
-        "run `filepawl accept pkg/named.py`"
+        len(findings),
+        [f.path for f in findings],
+        len(cap_msgs),
+        len(watch_msgs),
+        cap_msgs[0],
+        watch_msgs[0],
+    ) == (
+        2,
+        ["pkg/named.py", "pkg/named.py"],
+        1,
+        1,
+        f"over cap {CAP} ({CAP + 1} lines); split it",
+        f"over watch line {WATCH} ({CAP + 1} lines); "
+        "run `filepawl accept pkg/named.py`",
     )

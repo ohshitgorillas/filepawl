@@ -41,16 +41,18 @@ def test_marketplace_lists_the_plugin_directory() -> None:
         (REPO / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
     )
     [entry] = marketplace["plugins"]
-    assert entry["name"] == "filepawl"
-    assert (REPO / entry["source"] / ".claude-plugin" / "plugin.json").is_file()
+    manifest = REPO / entry["source"] / ".claude-plugin" / "plugin.json"
+    assert (entry["name"], manifest.is_file()) == ("filepawl", True)
 
 
 def test_hooks_json_runs_the_script_before_write_edit_and_multiedit() -> None:
     hooks = json.loads((PLUGIN / "hooks" / "hooks.json").read_text(encoding="utf-8"))
     [group] = hooks["hooks"]["PreToolUse"]
-    assert set(group["matcher"].split("|")) == {"Write", "Edit", "MultiEdit"}
     [command] = group["hooks"]
-    assert "${CLAUDE_PLUGIN_ROOT}/hooks/filepawl-hook.sh" in command["command"]
+    assert (
+        set(group["matcher"].split("|")),
+        "${CLAUDE_PLUGIN_ROOT}/hooks/filepawl-hook.sh" in command["command"],
+    ) == ({"Write", "Edit", "MultiEdit"}, True)
 
 
 def test_no_filepawl_anywhere_is_silent_and_exits_zero(tmp_path: Path) -> None:

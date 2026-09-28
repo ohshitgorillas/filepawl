@@ -54,14 +54,16 @@ class TestBarrelsPolicy:
             '"pkg/core/a.py::f" = "facade"\n',
         )
         policy = load_policy(tmp_path)
-        assert policy.barrels == BarrelsPolicy(
-            include=("pkg/**/*.py",),
-            forwarders=("pkg/core/**",),
-            module_exempt={"pkg/shim.py": "entry point name"},
-            forwarder_exempt={"pkg/core/a.py::f": "facade"},
-            enabled=False,
+        assert (policy.barrels, "barrels" not in policy.gate_tables) == (
+            BarrelsPolicy(
+                include=("pkg/**/*.py",),
+                forwarders=("pkg/core/**",),
+                module_exempt={"pkg/shim.py": "entry point name"},
+                forwarder_exempt={"pkg/core/a.py::f": "facade"},
+                enabled=False,
+            ),
+            True,
         )
-        assert "barrels" not in policy.gate_tables
 
     def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
         write(tmp_path, "[tool.filepawl.barrels]\nscope = []\n")
@@ -94,13 +96,15 @@ class TestNestingPolicy:
             '"pkg/a.py::C.f" = "parser state machine"\n',
         )
         policy = load_policy(tmp_path)
-        assert policy.nesting == NestingPolicy(
-            include=("pkg/**/*.py",),
-            max_depth=3,
-            exempt={"pkg/a.py::C.f": "parser state machine"},
-            enabled=False,
+        assert (policy.nesting, "nesting" not in policy.gate_tables) == (
+            NestingPolicy(
+                include=("pkg/**/*.py",),
+                max_depth=3,
+                exempt={"pkg/a.py::C.f": "parser state machine"},
+                enabled=False,
+            ),
+            True,
         )
-        assert "nesting" not in policy.gate_tables
 
     def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
         write(tmp_path, "[tool.filepawl.nesting]\nmax = 4\n")
@@ -118,8 +122,10 @@ class TestNestingPolicy:
             load_policy(tmp_path)
 
     def test_stub_carries_the_nesting_block(self) -> None:
-        assert "# [tool.filepawl.nesting]" in DEFAULT_POLICY_STUB
-        assert "# max_depth = 4" in DEFAULT_POLICY_STUB
+        assert (
+            "# [tool.filepawl.nesting]" in DEFAULT_POLICY_STUB,
+            "# max_depth = 4" in DEFAULT_POLICY_STUB,
+        ) == (True, True)
 
 
 class TestReturnsPolicy:
@@ -138,12 +144,14 @@ class TestReturnsPolicy:
             '"pkg/a.py::C.f" = "wire format, two message kinds"\n',
         )
         policy = load_policy(tmp_path)
-        assert policy.returns == ReturnsPolicy(
-            include=("pkg/**/*.py",),
-            exempt={"pkg/a.py::C.f": "wire format, two message kinds"},
-            enabled=False,
+        assert (policy.returns, "returns" not in policy.gate_tables) == (
+            ReturnsPolicy(
+                include=("pkg/**/*.py",),
+                exempt={"pkg/a.py::C.f": "wire format, two message kinds"},
+                enabled=False,
+            ),
+            True,
         )
-        assert "returns" not in policy.gate_tables
 
     def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
         write(tmp_path, "[tool.filepawl.returns]\nmax_shapes = 2\n")
@@ -156,8 +164,10 @@ class TestReturnsPolicy:
             load_policy(tmp_path)
 
     def test_stub_carries_the_returns_block(self) -> None:
-        assert "# [tool.filepawl.returns]" in DEFAULT_POLICY_STUB
-        assert "# [tool.filepawl.returns.exempt]" in DEFAULT_POLICY_STUB
+        assert (
+            "# [tool.filepawl.returns]" in DEFAULT_POLICY_STUB,
+            "# [tool.filepawl.returns.exempt]" in DEFAULT_POLICY_STUB,
+        ) == (True, True)
 
 
 class TestNamedResultsPolicy:
@@ -175,10 +185,12 @@ class TestNamedResultsPolicy:
             "enabled = false\n",
         )
         policy = load_policy(tmp_path)
-        assert policy.named_results == NamedResultsPolicy(
-            include=("pkg/**/*.py",), exclude=("pkg/wire/**",), enabled=False
+        assert (policy.named_results, "named_results" not in policy.gate_tables) == (
+            NamedResultsPolicy(
+                include=("pkg/**/*.py",), exclude=("pkg/wire/**",), enabled=False
+            ),
+            True,
         )
-        assert "named_results" not in policy.gate_tables
 
     def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
         write(tmp_path, '[tool.filepawl.named_results]\nexempt = {"a.py::f" = "x"}\n')
@@ -191,8 +203,10 @@ class TestNamedResultsPolicy:
             load_policy(tmp_path)
 
     def test_stub_carries_the_named_results_block(self) -> None:
-        assert "# [tool.filepawl.named_results]" in DEFAULT_POLICY_STUB
-        assert "# exclude = []" in DEFAULT_POLICY_STUB
+        assert (
+            "# [tool.filepawl.named_results]" in DEFAULT_POLICY_STUB,
+            "# exclude = []" in DEFAULT_POLICY_STUB,
+        ) == (True, True)
 
 
 class TestHandlersPolicy:
@@ -211,12 +225,16 @@ class TestHandlersPolicy:
             '"pkg/a.py::main" = "the CLI boundary turns errors into exit codes"\n',
         )
         policy = load_policy(tmp_path)
-        assert policy.handlers == HandlersPolicy(
-            include=("pkg/**/*.py",),
-            exempt={"pkg/a.py::main": "the CLI boundary turns errors into exit codes"},
-            enabled=False,
+        assert (policy.handlers, "handlers" not in policy.gate_tables) == (
+            HandlersPolicy(
+                include=("pkg/**/*.py",),
+                exempt={
+                    "pkg/a.py::main": "the CLI boundary turns errors into exit codes"
+                },
+                enabled=False,
+            ),
+            True,
         )
-        assert "handlers" not in policy.gate_tables
 
     def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
         write(tmp_path, "[tool.filepawl.handlers]\nallow_none = true\n")
@@ -229,8 +247,10 @@ class TestHandlersPolicy:
             load_policy(tmp_path)
 
     def test_stub_carries_the_handlers_block(self) -> None:
-        assert "# [tool.filepawl.handlers]" in DEFAULT_POLICY_STUB
-        assert "# [tool.filepawl.handlers.exempt]" in DEFAULT_POLICY_STUB
+        assert (
+            "# [tool.filepawl.handlers]" in DEFAULT_POLICY_STUB,
+            "# [tool.filepawl.handlers.exempt]" in DEFAULT_POLICY_STUB,
+        ) == (True, True)
 
 
 class TestReachPolicy:
@@ -249,12 +269,14 @@ class TestReachPolicy:
             '"pkg/a.py::_twin" = "shared with its twin module"\n',
         )
         policy = load_policy(tmp_path)
-        assert policy.reach == ReachPolicy(
-            include=("pkg/**/*.py",),
-            exempt={"pkg/a.py::_twin": "shared with its twin module"},
-            enabled=False,
+        assert (policy.reach, "reach" not in policy.gate_tables) == (
+            ReachPolicy(
+                include=("pkg/**/*.py",),
+                exempt={"pkg/a.py::_twin": "shared with its twin module"},
+                enabled=False,
+            ),
+            True,
         )
-        assert "reach" not in policy.gate_tables
 
     def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
         write(tmp_path, "[tool.filepawl.reach]\nallow_none = true\n")
@@ -267,8 +289,10 @@ class TestReachPolicy:
             load_policy(tmp_path)
 
     def test_stub_carries_the_reach_block(self) -> None:
-        assert "# [tool.filepawl.reach]" in DEFAULT_POLICY_STUB
-        assert "# [tool.filepawl.reach.exempt]" in DEFAULT_POLICY_STUB
+        assert (
+            "# [tool.filepawl.reach]" in DEFAULT_POLICY_STUB,
+            "# [tool.filepawl.reach.exempt]" in DEFAULT_POLICY_STUB,
+        ) == (True, True)
 
 
 class TestJudgePolicy:
@@ -289,16 +313,18 @@ class TestJudgePolicy:
             '"pkg/hook.py::run_hook" = "the spec requires the hook to stay silent"\n',
         )
         policy = load_policy(tmp_path)
-        assert policy.judge == JudgePolicy(
-            enabled=True,
-            model="claude-opus-5",
-            batch=3,
-            timeout=60,
-            exempt={
-                "pkg/hook.py::run_hook": "the spec requires the hook to stay silent"
-            },
+        assert (policy.judge, "judge" not in policy.gate_tables) == (
+            JudgePolicy(
+                enabled=True,
+                model="claude-opus-5",
+                batch=3,
+                timeout=60,
+                exempt={
+                    "pkg/hook.py::run_hook": "the spec requires the hook to stay silent"
+                },
+            ),
+            True,
         )
-        assert "judge" not in policy.gate_tables
 
     def test_unknown_key_is_config_error(self, tmp_path: Path) -> None:
         write(tmp_path, "[tool.filepawl.judge]\nretries = 3\n")
@@ -322,9 +348,11 @@ class TestJudgePolicy:
             load_policy(tmp_path)
 
     def test_stub_carries_the_judge_block(self) -> None:
-        assert "# [tool.filepawl.judge]" in DEFAULT_POLICY_STUB
-        assert '# model = "claude-sonnet-5"' in DEFAULT_POLICY_STUB
-        assert "# [tool.filepawl.judge.exempt]" in DEFAULT_POLICY_STUB
+        assert (
+            "# [tool.filepawl.judge]" in DEFAULT_POLICY_STUB,
+            '# model = "claude-sonnet-5"' in DEFAULT_POLICY_STUB,
+            "# [tool.filepawl.judge.exempt]" in DEFAULT_POLICY_STUB,
+        ) == (True, True, True)
 
 
 class TestDefaultPolicy:
@@ -372,11 +400,13 @@ class TestParsing:
             """,
         )
         policy = load_policy(tmp_path)
-        assert policy.length == LengthPolicy(cap=600, cap_tests=900, watch=450)
-        assert policy.dircount == DircountPolicy(
-            cap=20, cap_tests=40, exclude=("__init__.py", "__main__.py")
+        assert (policy.length, policy.dircount, policy.languages) == (
+            LengthPolicy(cap=600, cap_tests=900, watch=450),
+            DircountPolicy(
+                cap=20, cap_tests=40, exclude=("__init__.py", "__main__.py")
+            ),
+            default_policy().languages,
         )
-        assert policy.languages == default_policy().languages
 
     def test_exempt_table(self, tmp_path: Path) -> None:
         write(
@@ -446,12 +476,14 @@ class TestParsing:
             """,
         )
         policy = load_policy(tmp_path)
-        assert policy.languages["javascript"] == LanguagePolicy(
-            include=("**/*.js", "**/*.css"),
-            mover="command",
-            mover_command="npx jscodeshift -t scripts/move.js src/",
+        assert (policy.languages["javascript"], policy.languages["python"]) == (
+            LanguagePolicy(
+                include=("**/*.js", "**/*.css"),
+                mover="command",
+                mover_command="npx jscodeshift -t scripts/move.js src/",
+            ),
+            default_policy().languages["python"],
         )
-        assert policy.languages["python"] == default_policy().languages["python"]
 
     def test_language_with_no_mover_is_none(self, tmp_path: Path) -> None:
         write(
@@ -745,12 +777,16 @@ class TestEnabledFlag:
 class TestDefaultPolicyStub:
     def test_stub_is_all_commented(self) -> None:
         lines = DEFAULT_POLICY_STUB.splitlines()
-        assert lines[0] == ""
-        assert lines[1] == "# filepawl policy; uncomment to override defaults"
-        for line in lines[2:]:
-            assert line.startswith("#")
+        uncommented = [line for line in lines[2:] if not line.startswith("#")]
+        assert (lines[0], lines[1], uncommented) == (
+            "",
+            "# filepawl policy; uncomment to override defaults",
+            [],
+        )
 
     def test_stub_contains_the_section_4_block(self) -> None:
-        assert "[tool.filepawl]" in DEFAULT_POLICY_STUB
-        assert "[tool.filepawl.python]" in DEFAULT_POLICY_STUB
-        assert "cap = 500" in DEFAULT_POLICY_STUB
+        assert (
+            "[tool.filepawl]" in DEFAULT_POLICY_STUB,
+            "[tool.filepawl.python]" in DEFAULT_POLICY_STUB,
+            "cap = 500" in DEFAULT_POLICY_STUB,
+        ) == (True, True, True)

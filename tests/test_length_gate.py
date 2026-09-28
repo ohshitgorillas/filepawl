@@ -61,10 +61,10 @@ def test_file_over_cap_fails_and_accept_cannot_fix_it(repo: Repo) -> None:
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
     cap_findings = [f for f in findings if "over cap" in f.message]
-    assert messages(cap_findings) == [
-        ("a.py", f"over cap {CAP} ({CAP + 1} lines); split it")
-    ]
-    assert cap_findings[0].fixable_by_accept is False
+    assert (messages(cap_findings), cap_findings[0].fixable_by_accept) == (
+        [("a.py", f"over cap {CAP} ({CAP + 1} lines); split it")],
+        False,
+    )
 
 
 def test_over_cap_file_also_reports_the_missing_entry(repo: Repo) -> None:
@@ -98,10 +98,10 @@ def test_test_file_over_tests_cap_fails(repo: Repo) -> None:
     root = repo({"tests/test_a.py": CAP_TESTS + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert messages(findings) == [
-        ("tests/test_a.py", f"test over cap {CAP_TESTS} ({CAP_TESTS + 1} lines)")
-    ]
-    assert findings[0].fixable_by_accept is False
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("tests/test_a.py", f"test over cap {CAP_TESTS} ({CAP_TESTS + 1} lines)")],
+        False,
+    )
 
 
 def test_test_file_over_watch_needs_no_entry(repo: Repo) -> None:
@@ -158,8 +158,10 @@ def test_exempt_naming_a_path_outside_the_tree_is_reported(repo: Repo) -> None:
     root = repo({"a.py": 5})
     pol = policy(exempt={"gone.py": "stale reason"})
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert messages(findings) == [("gone.py", "exempt names a path outside the tree")]
-    assert findings[0].fixable_by_accept is False
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("gone.py", "exempt names a path outside the tree")],
+        False,
+    )
 
 
 # --- ratchet -----------------------------------------------------------
@@ -181,14 +183,16 @@ def test_file_over_watch_without_entry_names_the_accept_command(repo: Repo) -> N
     root = repo({"pkg/a.py": WATCH + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert messages(findings) == [
-        (
-            "pkg/a.py",
-            f"over watch line {WATCH} ({WATCH + 1} lines); "
-            "run `filepawl accept pkg/a.py`",
-        )
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [
+            (
+                "pkg/a.py",
+                f"over watch line {WATCH} ({WATCH + 1} lines); "
+                "run `filepawl accept pkg/a.py`",
+            )
+        ],
+        True,
+    )
 
 
 def test_file_equal_to_entry_passes(repo: Repo) -> None:
@@ -209,10 +213,10 @@ def test_grown_file_fails_and_accept_cannot_fix_it(repo: Repo) -> None:
     pol = policy()
     state = state_for({"a.py": Entry(lines=WATCH + 5)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("a.py", f"grew past allowance ({WATCH + 6} > {WATCH + 5}); split it")
-    ]
-    assert findings[0].fixable_by_accept is False
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("a.py", f"grew past allowance ({WATCH + 6} > {WATCH + 5}); split it")],
+        False,
+    )
 
 
 def test_shrunk_file_fails_and_names_the_accept_command(repo: Repo) -> None:
@@ -220,10 +224,10 @@ def test_shrunk_file_fails_and_names_the_accept_command(repo: Repo) -> None:
     pol = policy()
     state = state_for({"a.py": Entry(lines=WATCH + 5)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("a.py", f"shrank ({WATCH + 4} < {WATCH + 5}); run `filepawl accept a.py`")
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("a.py", f"shrank ({WATCH + 4} < {WATCH + 5}); run `filepawl accept a.py`")],
+        True,
+    )
 
 
 def test_multiple_offenders_are_reported_together_sorted_by_path(repo: Repo) -> None:
@@ -242,10 +246,10 @@ def test_stale_entry_outside_the_tree(repo: Repo) -> None:
     pol = policy()
     state = state_for({"gone.py": Entry(lines=WATCH + 5)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("gone.py", "allowance names a path outside the tree; drop it")
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("gone.py", "allowance names a path outside the tree; drop it")],
+        True,
+    )
 
 
 def test_untracked_file_on_disk_is_outside_the_tree(repo: Repo) -> None:
@@ -264,10 +268,12 @@ def test_tracked_file_deleted_from_disk_is_outside_the_tree(repo: Repo) -> None:
     pol = policy()
     state = state_for({"gone.py": Entry(lines=WATCH + 5)})
     tree = tree_for(root, pol)
-    assert messages(LengthGate().run(tree, pol, state)) == [
-        ("gone.py", "allowance names a path outside the tree; drop it")
-    ]
-    assert LengthGate().accept(tree, pol, state).allowance == {}
+    reported = messages(LengthGate().run(tree, pol, state))
+    accepted = LengthGate().accept(tree, pol, state).allowance
+    assert (reported, accepted) == (
+        [("gone.py", "allowance names a path outside the tree; drop it")],
+        {},
+    )
 
 
 def test_stale_entry_naming_a_test_path(repo: Repo) -> None:
@@ -275,10 +281,10 @@ def test_stale_entry_naming_a_test_path(repo: Repo) -> None:
     pol = policy()
     state = state_for({"tests/test_a.py": Entry(lines=WATCH + 5)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("tests/test_a.py", "allowance names a test path; drop it")
-    ]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("tests/test_a.py", "allowance names a test path; drop it")],
+        True,
+    )
 
 
 def test_stale_entry_back_under_the_watch_line(repo: Repo) -> None:
@@ -286,8 +292,10 @@ def test_stale_entry_back_under_the_watch_line(repo: Repo) -> None:
     pol = policy()
     state = state_for({"a.py": Entry(lines=WATCH + 5)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [("a.py", f"back under watch line {WATCH}; drop it")]
-    assert findings[0].fixable_by_accept is True
+    assert (messages(findings), findings[0].fixable_by_accept) == (
+        [("a.py", f"back under watch line {WATCH}; drop it")],
+        True,
+    )
 
 
 def test_stale_audit_covers_the_whole_table_when_measured_is_narrowed(
@@ -309,17 +317,21 @@ def test_stale_audit_covers_the_whole_table_when_measured_is_narrowed(
         }
     )
     tree = tree_for(root, pol, ["picked.py"])
-    assert tree.measured() == ("picked.py",)
-    assert messages(LengthGate().run(tree, pol, state)) == [
-        (
-            "picked.py",
-            f"over watch line {WATCH} ({WATCH + 3} lines); "
-            "run `filepawl accept picked.py`",
-        ),
-        ("gone.py", "allowance names a path outside the tree; drop it"),
-        ("shrunk.py", f"back under watch line {WATCH}; drop it"),
-        ("tests/test_a.py", "allowance names a test path; drop it"),
-    ]
+    measured = tree.measured()
+    reported = messages(LengthGate().run(tree, pol, state))
+    assert (measured, reported) == (
+        ("picked.py",),
+        [
+            (
+                "picked.py",
+                f"over watch line {WATCH} ({WATCH + 3} lines); "
+                "run `filepawl accept picked.py`",
+            ),
+            ("gone.py", "allowance names a path outside the tree; drop it"),
+            ("shrunk.py", f"back under watch line {WATCH}; drop it"),
+            ("tests/test_a.py", "allowance names a test path; drop it"),
+        ],
+    )
 
 
 def test_narrowing_hides_only_the_unmeasured_files(repo: Repo) -> None:
@@ -363,10 +375,12 @@ def test_accept_refuses_to_raise_and_the_finding_survives(repo: Repo) -> None:
     state = state_for({"a.py": Entry(lines=WATCH + 2)})
     tree = tree_for(root, pol)
     after = LengthGate().accept(tree, pol, state)
-    assert after.allowance == {"a.py": Entry(lines=WATCH + 2)}
-    assert messages(LengthGate().run(tree, pol, after)) == [
-        ("a.py", f"grew past allowance ({WATCH + 9} > {WATCH + 2}); split it")
-    ]
+    kept = dict(after.allowance)
+    reported = messages(LengthGate().run(tree, pol, after))
+    assert (kept, reported) == (
+        {"a.py": Entry(lines=WATCH + 2)},
+        [("a.py", f"grew past allowance ({WATCH + 9} > {WATCH + 2}); split it")],
+    )
 
 
 def test_accept_does_not_raise_on_a_grown_file(repo: Repo) -> None:
@@ -435,8 +449,7 @@ def test_accept_leaves_a_clean_state_untouched(repo: Repo) -> None:
     pol = policy()
     state = state_for({"a.py": Entry(lines=WATCH + 3, reason="why")})
     after = LengthGate().accept(tree_for(root, pol), pol, state)
-    assert after.allowance == state.allowance
-    assert after.version == state.version
+    assert (after.allowance, after.version) == (state.allowance, state.version)
 
 
 def test_accept_clears_every_fixable_finding(repo: Repo) -> None:
@@ -459,6 +472,10 @@ def test_accept_clears_every_fixable_finding(repo: Repo) -> None:
     )
     tree = tree_for(root, pol)
     gate = LengthGate()
-    assert [f for f in gate.run(tree, pol, state) if f.fixable_by_accept]
+    before = [f for f in gate.run(tree, pol, state) if f.fixable_by_accept]
     after = gate.accept(tree, pol, state)
-    assert [f for f in gate.run(tree, pol, after) if f.fixable_by_accept] == []
+    remaining = [f for f in gate.run(tree, pol, after) if f.fixable_by_accept]
+    assert ([f.path for f in before], remaining) == (
+        ["add.py", "shrunk.py", "gone.py", "tests/test_a.py", "under.py"],
+        [],
+    )

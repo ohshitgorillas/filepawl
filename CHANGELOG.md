@@ -11,6 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **The existence gate fails tests that assert only that a value exists.** A test whose every `assert` claims only that its result is truthy, not `None`, of some type or non-empty fails: a stub returning any value passes it too. Only test paths are checked.
 - **The existence gate reads `[tool.filepawl.existence]` in `pyproject.toml`.** `include`, `exempt` keyed `path::qualified.name` with a reason, and `enabled`; the `filepawl init` stub carries the block.
 
+- **The claims gate fails a test that makes more than one claim.** A test with `assert out.code == 3` and `assert out.body == "ok"` fails. Split it into two tests, or assert `(out.code, out.body) == (3, "ok")`.
+- **The claims gate reads `[tool.filepawl.claims]` in `pyproject.toml`.** `include`, `exempt` keyed `path::qualified.name` with a reason, and `enabled`; the `filepawl init` stub carries the block.
+
 ### Changed
 
 - **The handlers gate fails a function that returns a fallback its handler stored in an item or attribute,** such as `self.cache = None` in the handler and `return self.cache` after it.

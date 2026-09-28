@@ -118,8 +118,10 @@ def test_methods_are_keyed_by_qualified_name_with_decorators_in_the_source(
     root = repo({"pkg/store.py": method(HANDLER_RETURN)})
     _stage(root, {"pkg/store.py": method(HANDLER_MOVED)})
     [case] = find_cases(root, default_policy(), head=False)
-    assert case.key == "pkg/store.py::Store.load"
-    assert case.new.startswith("    @staticmethod\n    def load(path):\n")
+    assert (
+        case.key,
+        case.new.startswith("    @staticmethod\n    def load(path):\n"),
+    ) == ("pkg/store.py::Store.load", True)
 
 
 def test_the_helpers_are_the_functions_the_new_version_adds(repo: Repo) -> None:

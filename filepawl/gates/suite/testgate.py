@@ -235,6 +235,20 @@ def _collect(node: ast.AST, asserts: list[ast.Assert]) -> bool:
     )
 
 
+def own_nodes(test: TestNode) -> list[ast.AST]:
+    """Return every node of a test's own body in source order, the bodies of
+    nested functions, lambdas and classes left out."""
+    found: list[ast.AST] = []
+    pending: list[ast.AST] = list(reversed(test.body))
+    while pending:
+        node = pending.pop()
+        if isinstance(node, _SCOPES):
+            continue
+        found.append(node)
+        pending.extend(reversed(list(ast.iter_child_nodes(node))))
+    return found
+
+
 def own_asserts(test: TestNode) -> list[ast.Assert] | None:
     """Return a test's own asserts, or None when it asserts something else."""
     asserts: list[ast.Assert] = []

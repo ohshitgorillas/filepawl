@@ -92,11 +92,15 @@ def test_a_dodge_prints_its_line_and_exits_one(
             "pkg/info.py::info": ("dodge", "dict() hands back a second shape"),
         }
     )
-    assert main(["judge"]) == 1
-    assert capsys.readouterr().out.splitlines() == [
-        "pkg/info.py::info: returns judge: dict() hands back a second shape" + FIX,
-        f"pkg/io.py::load: handlers judge: {DODGE[1]}" + FIX,
-    ]
+    code = main(["judge"])
+    lines = capsys.readouterr().out.splitlines()
+    assert (code, lines) == (
+        1,
+        [
+            "pkg/info.py::info: returns judge: dict() hands back a second shape" + FIX,
+            f"pkg/io.py::load: handlers judge: {DODGE[1]}" + FIX,
+        ],
+    )
 
 
 def test_a_clean_verdict_exits_zero_and_prints_nothing(
@@ -202,13 +206,17 @@ def test_the_audit_reports_stale_exemptions_under_pyproject(
     _git(Path.cwd(), "add", "README.md")
     fake_claude.answer({"pkg/io.py::load": DODGE})
     where = "pyproject.toml: [tool.filepawl.judge.exempt]"
-    assert main(["judge"]) == 1
-    assert capsys.readouterr().out.splitlines() == [
-        f"{where} 'README.md::f': names no file",
-        f"{where} 'pkg/io.py::gone': names no function",
-        f"{where} 'pkg/missing.py::f': names no file",
-    ]
-    assert fake_claude.calls() == []
+    code = main(["judge"])
+    lines = capsys.readouterr().out.splitlines()
+    assert (code, lines, fake_claude.calls()) == (
+        1,
+        [
+            f"{where} 'README.md::f': names no file",
+            f"{where} 'pkg/io.py::gone': names no function",
+            f"{where} 'pkg/missing.py::f': names no file",
+        ],
+        [],
+    )
 
 
 def test_a_call_failing_twice_exits_two(
@@ -219,9 +227,13 @@ def test_a_call_failing_twice_exits_two(
 ) -> None:
     monkeypatch.chdir(_silenced(repo))
     fake_claude.answer({}, {"exit": 1})
-    assert _exit_code(["judge"]) == 2
-    assert "filepawl: `claude` failed twice: exited 1" in capsys.readouterr().err
-    assert len(fake_claude.calls()) == 2
+    code = _exit_code(["judge"])
+    err = capsys.readouterr().err
+    assert (
+        code,
+        "filepawl: `claude` failed twice: exited 1" in err,
+        len(fake_claude.calls()),
+    ) == (2, True, 2)
 
 
 def test_a_missing_claude_exits_two(
@@ -236,8 +248,9 @@ def test_a_missing_claude_exits_two(
     (bin_dir / "git").symlink_to(git)
     monkeypatch.chdir(_silenced(repo))
     monkeypatch.setenv("PATH", str(bin_dir))
-    assert _exit_code(["judge"]) == 2
-    assert "filepawl: `claude` is not on PATH" in capsys.readouterr().err
+    code = _exit_code(["judge"])
+    err = capsys.readouterr().err
+    assert (code, "filepawl: `claude` is not on PATH" in err) == (2, True)
 
 
 def test_a_configuration_error_exits_two(

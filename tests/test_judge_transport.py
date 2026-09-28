@@ -49,32 +49,39 @@ def test_a_call_runs_claude_in_print_mode_with_the_prompt_and_cases(
     )
     verdicts = ask_judge(tmp_path, [case], JudgePolicy(model="claude-opus-5"))
     [call] = fake_claude.calls()
-    assert _verdicts(verdicts) == [("pkg/a.py::f", *DODGE)]
-    assert call["argv"] == [
-        "-p",
-        "--model",
-        "claude-opus-5",
-        "--tools",
-        "",
-        "--setting-sources",
-        "",
-        "--no-session-persistence",
-        "--output-format",
-        "json",
-    ]
-    assert (call["cwd"], call["inner"], call["claudecode"]) == (
+    assert (
+        _verdicts(verdicts),
+        call["argv"],
+        call["cwd"],
+        call["inner"],
+        call["claudecode"],
+        call["stdin"],
+    ) == (
+        [("pkg/a.py::f", *DODGE)],
+        [
+            "-p",
+            "--model",
+            "claude-opus-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "",
+            "--no-session-persistence",
+            "--output-format",
+            "json",
+        ],
         str(tmp_path.resolve()),
         "1",
         None,
-    )
-    assert call["stdin"] == (
-        PROMPT
-        + "\nCASES:\n\n"
-        + "### CASE 1\nGATE: returns\nFUNCTION: pkg/a.py::f\n"
-        + "BEFORE:\ndef f():\n    old()\n"
-        + "AFTER:\ndef f():\n    new()\n"
-        + "HELPERS:\n# helper added in the same file: _shape\n"
-        + "def _shape():\n    return {}\n\n"
+        (
+            PROMPT
+            + "\nCASES:\n\n"
+            + "### CASE 1\nGATE: returns\nFUNCTION: pkg/a.py::f\n"
+            + "BEFORE:\ndef f():\n    old()\n"
+            + "AFTER:\ndef f():\n    new()\n"
+            + "HELPERS:\n# helper added in the same file: _shape\n"
+            + "def _shape():\n    return {}\n\n"
+        ),
     )
 
 
@@ -85,14 +92,10 @@ def test_cases_go_in_calls_of_batch_cases_each(
     cases = [_case(name) for name in "abcde"]
     verdicts = ask_judge(tmp_path, cases, POLICY)
     sizes = [str(call["stdin"]).count("### CASE") for call in fake_claude.calls()]
-    assert sizes == [2, 2, 1]
-    assert [v.verdict for v in verdicts] == [
-        "clean",
-        "clean",
-        "dodge",
-        "clean",
-        "clean",
-    ]
+    assert (sizes, [v.verdict for v in verdicts]) == (
+        [2, 2, 1],
+        ["clean", "clean", "dodge", "clean", "clean"],
+    )
 
 
 @pytest.mark.parametrize(
@@ -108,11 +111,13 @@ def test_a_fenced_answer_and_text_around_the_array_are_read(
 ) -> None:
     fake_claude.answer({"pkg/a.py::g": DODGE}, {"wrap": wrap})
     verdicts = ask_judge(tmp_path, [_case("f"), _case("g")], POLICY)
-    assert _verdicts(verdicts) == [
-        ("pkg/a.py::f", "clean", "the failure propagates"),
-        ("pkg/a.py::g", *DODGE),
-    ]
-    assert len(fake_claude.calls()) == 1
+    assert (_verdicts(verdicts), len(fake_claude.calls())) == (
+        [
+            ("pkg/a.py::f", "clean", "the failure propagates"),
+            ("pkg/a.py::g", *DODGE),
+        ],
+        1,
+    )
 
 
 @pytest.mark.parametrize(
@@ -129,8 +134,10 @@ def test_an_unreadable_answer_is_asked_once_more(
 ) -> None:
     fake_claude.answer({"pkg/a.py::f": DODGE}, unreadable, {})
     verdicts = ask_judge(tmp_path, [_case("f")], POLICY)
-    assert _verdicts(verdicts) == [("pkg/a.py::f", *DODGE)]
-    assert len(fake_claude.calls()) == 2
+    assert (_verdicts(verdicts), len(fake_claude.calls())) == (
+        [("pkg/a.py::f", *DODGE)],
+        2,
+    )
 
 
 def test_a_call_failing_twice_is_a_judge_error(
@@ -153,9 +160,12 @@ def test_unanswered_cases_are_asked_once_more_together(
     )
     verdicts = ask_judge(tmp_path, [_case(name) for name in "abcd"], POLICY)
     retry = str(fake_claude.calls()[-1]["stdin"])
-    assert len(fake_claude.calls()) == 3
-    assert (retry.count("### CASE"), "FUNCTION: pkg/a.py::b" in retry) == (2, True)
-    assert [v.verdict for v in verdicts] == ["clean", "dodge", "clean", "clean"]
+    assert (
+        len(fake_claude.calls()),
+        retry.count("### CASE"),
+        "FUNCTION: pkg/a.py::b" in retry,
+        [v.verdict for v in verdicts],
+    ) == (3, 2, True, ["clean", "dodge", "clean", "clean"])
 
 
 def test_a_case_still_unanswered_is_a_dodge(
@@ -163,11 +173,13 @@ def test_a_case_still_unanswered_is_a_dodge(
 ) -> None:
     fake_claude.answer({}, {"omit": ["pkg/a.py::b"]})
     verdicts = ask_judge(tmp_path, [_case("a"), _case("b")], POLICY)
-    assert _verdicts(verdicts) == [
-        ("pkg/a.py::a", "clean", "the failure propagates"),
-        ("pkg/a.py::b", "dodge", "no verdict"),
-    ]
-    assert len(fake_claude.calls()) == 2
+    assert (_verdicts(verdicts), len(fake_claude.calls())) == (
+        [
+            ("pkg/a.py::a", "clean", "the failure propagates"),
+            ("pkg/a.py::b", "dodge", "no verdict"),
+        ],
+        2,
+    )
 
 
 def test_an_answer_naming_no_verdict_leaves_the_case_unanswered(
@@ -175,8 +187,10 @@ def test_an_answer_naming_no_verdict_leaves_the_case_unanswered(
 ) -> None:
     fake_claude.answer({"pkg/a.py::a": ("maybe", "hard to say")})
     verdicts = ask_judge(tmp_path, [_case("a")], POLICY)
-    assert _verdicts(verdicts) == [("pkg/a.py::a", "dodge", "no verdict")]
-    assert len(fake_claude.calls()) == 2
+    assert (_verdicts(verdicts), len(fake_claude.calls())) == (
+        [("pkg/a.py::a", "dodge", "no verdict")],
+        2,
+    )
 
 
 def test_a_missing_claude_is_a_judge_error(

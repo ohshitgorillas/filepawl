@@ -24,6 +24,7 @@ BUILTINS = [
     "reach",
     "absence",
     "existence",
+    "claims",
     "private",
     "mocks",
     "clocks",

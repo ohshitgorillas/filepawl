@@ -90,8 +90,7 @@ def test_glob_match_double_star_suffix_does_not_match_sibling_prefix() -> None:
 
 
 def test_glob_match_star_does_not_cross_slash() -> None:
-    assert not glob_match("*.py", "x/a.py")
-    assert glob_match("*.py", "a.py")
+    assert (glob_match("*.py", "x/a.py"), glob_match("*.py", "a.py")) == (False, True)
 
 
 def test_glob_match_no_match_wrong_extension() -> None:
@@ -114,9 +113,11 @@ def test_is_test_uses_tests_globs() -> None:
         tests=policy.tests,
         languages={},
     )
-    assert tree.is_test("tests/a.py")
-    assert tree.is_test("tests/x/y.py")
-    assert not tree.is_test("filepawl/tree.py")
+    assert (
+        tree.is_test("tests/a.py"),
+        tree.is_test("tests/x/y.py"),
+        tree.is_test("filepawl/tree.py"),
+    ) == (True, True, False)
 
 
 def test_language_of_returns_first_matching_block() -> None:
@@ -130,10 +131,12 @@ def test_language_of_returns_first_matching_block() -> None:
             "javascript": ("**/*.js", "**/*.css"),
         },
     )
-    assert tree.language_of("a.py") == "python"
-    assert tree.language_of("a.js") == "javascript"
-    assert tree.language_of("a.css") == "javascript"
-    assert tree.language_of("a.txt") is None
+    assert (
+        tree.language_of("a.py"),
+        tree.language_of("a.js"),
+        tree.language_of("a.css"),
+        tree.language_of("a.txt"),
+    ) == ("python", "javascript", "javascript", None)
 
 
 def test_language_of_first_block_wins_on_overlap() -> None:
@@ -255,8 +258,10 @@ def test_build_tree_files_are_posix_relative_and_sorted(
 ) -> None:
     root = repo({"z.py": 1, "a.py": 1, "sub/b.py": 1})
     tree = build_tree(root, _make_policy())
-    assert tree.files == ("a.py", "sub/b.py", "z.py")
-    assert all("\\" not in f for f in tree.files)
+    assert (tree.files, all("\\" not in f for f in tree.files)) == (
+        ("a.py", "sub/b.py", "z.py"),
+        True,
+    )
 
 
 def test_build_tree_no_paths_is_whole_tree(
@@ -264,8 +269,7 @@ def test_build_tree_no_paths_is_whole_tree(
 ) -> None:
     root = repo({"a.py": 1, "b.py": 1})
     tree = build_tree(root, _make_policy())
-    assert tree.selected is None
-    assert tree.measured() == tree.files
+    assert (tree.selected, tree.measured() == tree.files) == (None, True)
 
 
 def test_build_tree_selected_keeps_only_argv_files(
@@ -273,8 +277,7 @@ def test_build_tree_selected_keeps_only_argv_files(
 ) -> None:
     root = repo({"a.py": 1, "b.py": 1})
     tree = build_tree(root, _make_policy(), paths=["a.py"])
-    assert tree.selected == ("a.py",)
-    assert tree.measured() == ("a.py",)
+    assert (tree.selected, tree.measured()) == (("a.py",), ("a.py",))
 
 
 def test_build_tree_selected_directory_selects_everything_beneath(
@@ -315,8 +318,7 @@ def test_build_tree_tests_globs_carried_from_policy(
 ) -> None:
     root = repo({"a.py": 1, "tests/test_a.py": 1})
     tree = build_tree(root, _make_policy(tests=("tests/**",)))
-    assert tree.is_test("tests/test_a.py")
-    assert not tree.is_test("a.py")
+    assert (tree.is_test("tests/test_a.py"), tree.is_test("a.py")) == (True, False)
 
 
 def test_build_tree_raises_config_error_on_non_utf8_filename(tmp_path: Path) -> None:

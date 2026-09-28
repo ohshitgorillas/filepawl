@@ -95,13 +95,19 @@ def test_a_source_file_over_the_watch_line_with_no_allowance_entry_fails(
     root = repo({"hqptuner/creeping.py": WATCH + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert messages(findings) == [
-        (
-            "hqptuner/creeping.py",
-            "over watch line 40 (41 lines); run `filepawl accept hqptuner/creeping.py`",
-        )
-    ]
-    assert any("over watch line" in f.message for f in findings)
+    assert (
+        messages(findings),
+        any("over watch line" in f.message for f in findings),
+    ) == (
+        [
+            (
+                "hqptuner/creeping.py",
+                "over watch line 40 (41 lines); "
+                "run `filepawl accept hqptuner/creeping.py`",
+            )
+        ],
+        True,
+    )
 
 
 def test_a_source_file_over_the_watch_line_with_no_allowance_entry_is_named_on_stdout(
@@ -307,10 +313,10 @@ def test_a_source_file_over_the_hard_cap_fails_even_with_an_allowance_permitting
     pol = policy()
     state = state_for({"hqptuner/enormous.py": Entry(lines=CAP + 1)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("hqptuner/enormous.py", "over cap 50 (51 lines); split it")
-    ]
-    assert any("over cap" in f.message for f in findings)
+    assert (
+        messages(findings),
+        any("over cap" in f.message for f in findings),
+    ) == ([("hqptuner/enormous.py", "over cap 50 (51 lines); split it")], True)
 
 
 def test_a_source_file_over_the_hard_cap_fails_with_no_allowance_entry(

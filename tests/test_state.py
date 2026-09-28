@@ -22,9 +22,7 @@ EXAMPLE_BYTES = (
 
 def test_load_state_absent_file_gives_empty_state(tmp_path: Path) -> None:
     state = load_state(tmp_path)
-    assert state == State()
-    assert state.version == 1
-    assert state.allowance == {}
+    assert (state, state.version, state.allowance) == (State(), 1, {})
 
 
 def test_write_state_produces_exact_design_doc_example(tmp_path: Path) -> None:
@@ -79,8 +77,7 @@ def test_write_state_rewrites_wholesale(tmp_path: Path) -> None:
     write_state(tmp_path, State(allowance={"old.py": Entry(lines=1)}))
     write_state(tmp_path, State(allowance={"new.py": Entry(lines=2)}))
     text = (tmp_path / ".filepawl.toml").read_text(encoding="utf-8")
-    assert "old.py" not in text
-    assert "new.py" in text
+    assert ("old.py" in text, "new.py" in text) == (False, True)
 
 
 def test_load_state_raises_on_unparseable_toml(tmp_path: Path) -> None:

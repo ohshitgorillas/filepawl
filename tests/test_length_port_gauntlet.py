@@ -81,10 +81,12 @@ def test_source_file_over_watch_line_fails(repo: Repo) -> None:
     root = repo({"hooks/long.py": WATCH + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert len(findings) == 1
-    assert findings[0].path == "hooks/long.py"
-    assert "hooks/long.py" in findings[0].message
-    assert str(WATCH + 1) in findings[0].message
+    assert (
+        len(findings),
+        findings[0].path,
+        "hooks/long.py" in findings[0].message,
+        str(WATCH + 1) in findings[0].message,
+    ) == (1, "hooks/long.py", True, True)
 
 
 # Test case 4: "a source file matching its allowance exactly passes"
@@ -105,8 +107,7 @@ def test_file_longer_than_allowance_fails(repo: Repo) -> None:
     state = state_for({"hooks/long.py": Entry(lines=WATCH + 4)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
     grown = [f for f in findings if "grew past" in f.message]
-    assert len(grown) > 0
-    assert grown[0].path == "hooks/long.py"
+    assert (len(grown) > 0, grown[0].path) == (True, "hooks/long.py")
 
 
 # Test case 6: "a source file shorter than its allowance fails"
@@ -117,8 +118,7 @@ def test_file_shorter_than_allowance_fails(repo: Repo) -> None:
     state = state_for({"hooks/long.py": Entry(lines=WATCH + 4)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
     shrunk = [f for f in findings if "shrank" in f.message]
-    assert len(shrunk) > 0
-    assert str(WATCH + 2) in shrunk[0].message
+    assert (len(shrunk) > 0, str(WATCH + 2) in shrunk[0].message) == (True, True)
 
 
 # Test case 7: "an allowance naming no file on disk fails as stale"
@@ -128,10 +128,10 @@ def test_allowance_naming_no_file_fails(repo: Repo) -> None:
     pol = policy()
     state = state_for({"hooks/deleted.py": Entry(lines=WATCH + 4)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("hooks/deleted.py", "allowance names a path outside the tree; drop it")
-    ]
-    assert findings[0].path == "hooks/deleted.py"
+    assert (messages(findings), findings[0].path) == (
+        [("hooks/deleted.py", "allowance names a path outside the tree; drop it")],
+        "hooks/deleted.py",
+    )
 
 
 # Test case 8: "a live allowance for a file not on argv passes"
@@ -156,10 +156,10 @@ def test_stale_allowance_for_unmeasured_file_fails(repo: Repo) -> None:
     # Measure only small.py, but the full state table is still audited
     # untouched.py is stale because it's back under watch line
     findings = LengthGate().run(tree_for(root, pol, ["hooks/small.py"]), pol, state)
-    assert messages(findings) == [
-        ("hooks/untouched.py", "back under watch line 40; drop it")
-    ]
-    assert findings[0].path == "hooks/untouched.py"
+    assert (messages(findings), findings[0].path) == (
+        [("hooks/untouched.py", "back under watch line 40; drop it")],
+        "hooks/untouched.py",
+    )
 
 
 # Test case 10: "an allowance for a file back under the watch line fails as stale"
@@ -169,10 +169,10 @@ def test_allowance_for_file_back_under_watch_line_fails(repo: Repo) -> None:
     pol = policy()
     state = state_for({"hooks/long.py": Entry(lines=WATCH + 4)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert messages(findings) == [
-        ("hooks/long.py", "back under watch line 40; drop it")
-    ]
-    assert findings[0].path == "hooks/long.py"
+    assert (messages(findings), findings[0].path) == (
+        [("hooks/long.py", "back under watch line 40; drop it")],
+        "hooks/long.py",
+    )
 
 
 # Test case 11: "an allowance for a file at the watch line fails as stale"
@@ -276,7 +276,9 @@ def test_one_offender_among_compliant_files(repo: Repo) -> None:
     # hooks/two.py and hooks/three.py should be reported (over watch line)
     # hooks/one.py and hooks/four.py should not be reported
     reported_paths = [f.path for f in findings]
-    assert "hooks/two.py" in reported_paths
-    assert "hooks/three.py" in reported_paths
-    assert "hooks/one.py" not in reported_paths
-    assert "hooks/four.py" not in reported_paths
+    assert (
+        "hooks/two.py" in reported_paths,
+        "hooks/three.py" in reported_paths,
+        "hooks/one.py" not in reported_paths,
+        "hooks/four.py" not in reported_paths,
+    ) == (True, True, True, True)
