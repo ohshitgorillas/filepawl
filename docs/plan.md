@@ -225,6 +225,14 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`feat: existence gate`**: `filepawl/gates/suite/existence.py`, after the absence gate in `_BUILTIN_GATES`; tests in `tests/suite/test_existence_gate.py` and `tests/test_gate_registry.py`; any test in this tree it fails rewritten in the same commit, with no exemption; `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
 - **`feat: handlers gate traces constant-key items and plain-name attributes`**: `filepawl/gates/handlers.py`, the judge prompt in `filepawl/judge/prompt.py`; tests in `tests/test_handlers_gate.py`; `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
 
+### Claims and detours gates (spec §6.12, §6.22, §6.23)
+
+- **`docs: claims and detours spec`**: `docs/design.md` §2, §3, §4, §6.12, §6.22, §6.23, §9; `docs/plan.md`.
+- **`feat: claims policy`**: `claims` in `filepawl/config_suite.py` and the stub; tests in `tests/suite/test_config_suite.py`.
+- **`feat: claims gate`**: `filepawl/gates/suite/claims.py`, after the existence gate in `_BUILTIN_GATES`; tests in `tests/suite/test_claims_gate.py` and `tests/test_gate_registry.py`; any test in this tree it fails rewritten in the same commit, with no exemption; `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
+- **`feat: detours policy`**: `detours` in `filepawl/config_suite.py` and the stub; tests in `tests/suite/test_config_suite.py`.
+- **`feat: detours gate`**: `filepawl/gates/suite/detours.py`, after the claims gate in `_BUILTIN_GATES`; the site-gate engine hands a gate the file's text for its comments; tests in `tests/suite/test_detours_gate.py` and `tests/test_gate_registry.py`; any site in this tree it fails rewritten in the same commit, with no exemption; `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
+
 ## Verification (orchestrator, end)
 
 ```

@@ -67,9 +67,11 @@ Out of scope: Trivia Judge's suite-time ratchet (`check_suite_time.py`), PyPI pu
 | Tuple assertions | an `assert` that compares two tuple displays of one length with `==` is read pair by pair, each pair an assertion of its own, `True` against a claim that yields a bool reading as the claim and `False` as its negation; the absence and existence gates judge the pairs |
 | Absence exemptions | live in policy, per test, human-edited, with a reason; no command writes them, and a stale one fails |
 | Own code | `[tool.filepawl] packages` names the repository's top-level import names; absent, they are derived from the tree's non-test Python files |
-| Test-suite gates | built-in, enabled by default, Python only (`ast`): private, mocks, environment, snapshots, test names, existence, fakes, clocks; each reads test paths only, whole tree every run |
-| Test-suite site gates | private, mocks, environment, snapshots, fakes and clocks report each offending site under its innermost function, and exempt per function, human-edited, with a reason; no command writes them, and a stale one fails |
-| Test-suite test gates | test names and existence judge each test as §6.11 does, and exempt per test, human-edited, with a reason; no command writes them, and a stale one fails |
+| Test-suite gates | built-in, enabled by default, Python only (`ast`): private, mocks, environment, snapshots, test names, existence, claims, detours, fakes, clocks; each reads test paths only, whole tree every run |
+| Test-suite site gates | private, mocks, environment, snapshots, detours, fakes and clocks report each offending site under its innermost function, and exempt per function, human-edited, with a reason; no command writes them, and a stale one fails |
+| Test-suite test gates | test names, existence and claims judge each test as §6.11 does, and exempt per test, human-edited, with a reason; no command writes them, and a stale one fails |
+| Claims per test | one; a narrowing guard for a later claim is no claim, a packed tuple assertion is one, and `pytest.raises` is not counted |
+| Detours | `raise AssertionError`, `pytest.fail`, `typing.cast`, a `# type: ignore` bare or naming `union-attr`, and an `or` whose last operand is absent each fail in a test path, since each claims or narrows where no gate reads an `assert` |
 | Mocks targets | none; every patch fails whatever it replaces, own code or third-party; setting process state through `chdir`, `setenv`, `delenv`, `syspath_prepend` and `sys.modules` or `os.environ` items is not a patch |
 | Test-suite heuristics | snapshots fails a literal over `max_items` leaves, default 8; test names fails under `min_words` words, default 3; clocks reads a duration under the `names` it lists, default `timeout`, `interval` and `delay`; all three are policy |
 | Clocks sites | a sleep on a real clock unless its first argument is the literal `0`, a call that reads a real clock, and a duration above 0 and under 0.5 seconds given to a pacing name; no directory is carved out, a browser suite included |
@@ -112,14 +114,16 @@ filepawl/
     suite/
       __init__.py
       common.py     # own code, own bindings, sites, tests, exemption audit
-    testgate.py   # what a test is, what its assertions claim, the test-gate engine
-    absence.py    # tests that assert only an absent value
+      testgate.py   # what a test is, what its assertions claim, the test-gate engine
+      absence.py    # tests that assert only an absent value
       private.py    # tests that reach private names
       mocks.py      # tests that patch or mock own code
       environment.py  # tests that read the host environment
       snapshots.py  # tests that compare against a golden dump
       naming.py     # test names that state no behavior
       existence.py  # tests that assert only that something exists
+      claims.py     # tests that make more than one claim
+      detours.py    # claims and narrowing that route around an assert
       fakes.py      # fakes that compute replies with own code
       clocks.py     # tests that run on the wall clock
   movers/
@@ -259,6 +263,18 @@ include = ["**/*.py"]
 
 [tool.filepawl.existence.exempt]
 # "path::qualified.name" = reason. Human-edited. A test whose contract is existence.
+
+[tool.filepawl.claims]
+include = ["**/*.py"]
+
+[tool.filepawl.claims.exempt]
+# "path::qualified.name" = reason. Human-edited. A test whose claims stand together on purpose.
+
+[tool.filepawl.detours]
+include = ["**/*.py"]
+
+[tool.filepawl.detours.exempt]
+# "path::qualified.name" = reason. Human-edited. A function that routes around an assert on purpose.
 
 [tool.filepawl.fakes]
 include = ["**/*.py"]
@@ -495,9 +511,9 @@ No absence finding is fixable by `accept`, and `accept` leaves state unchanged.
 
 ### 6.12 Test-suite gates, shared rules
 
-The absence gate and the eight gates after it read a repository's tests for shapes that pass whatever the code does. They share the rules in this section.
+The absence gate, the eight gates after it and the claims and detours gates (§6.22, §6.23) read a repository's tests for shapes that pass whatever the code does. They share the rules in this section.
 
-Checked files: tree files matched by the gate's own `include` and by a `tests` glob, as in §6.11. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6.
+Checked files: tree files matched by the gate's own `include` and by a `tests` glob, as in §6.11. Each is parsed with `ast` from `utf-8` text. A file that does not parse is skipped, as in §6.6. A site gate that reads comments tokenizes the same text.
 
 Own code is the set of top-level import names listed in `[tool.filepawl] packages`. When the key is absent, the set is derived from the tree: for each tree file ending `.py` that is not a test path, a leading `src/` segment is dropped, and the name is the first remaining segment, or the file's name without `.py` when one segment remains. `packages = []` declares that the repository has no own code.
 
@@ -630,6 +646,31 @@ Exemptions live in `[tool.filepawl.reach.exempt]`, keyed `path::name`, with a re
 
 No reach finding is fixable by `accept`, and `accept` leaves state unchanged.
 
+### 6.22 Claims gate
+
+A test that makes several claims stops at the first that breaks and hides the rest, and a test that may hold any number of claims grows by accretion into a test of everything its setup touches. The fix is one test per claim, or one packed tuple assertion (§6.11) when the claims are one contrast.
+
+A test gate. A test's claims are the `assert` statements in its body at any depth of blocks, inside `with` blocks included, less its narrowing guards; an `assert` inside a nested `def`, `lambda` or class is not the test's. `pytest.raises`, `pytest.warns` and an `assert*` method call are not counted. A packed tuple assertion is one claim.
+
+A narrowing guard is an `assert` that lets a type checker narrow a value for a claim that follows, and is not itself a claim. It is an `assert` whose test is a single comparison `x is not None` or `None is not x`, or a call `isinstance(x, T)` with two arguments, where `x` is a name, attribute or subscript, a statement of the test starting after the `assert` reads an expression spelled as `x` is, and a later `assert` of the test is not a narrowing guard. So in `out = run()`, `assert out is not None`, `assert out.code == 3` the first `assert` is a guard, and `assert out is not None` alone, or followed only by another guard, is a claim.
+
+A test fails when it makes more than one claim. Finding: `path::qualified.name: makes more than one claim — one claim per test; split it, or pack one contrast into a tuple assertion`.
+
+Exemptions live in `[tool.filepawl.claims.exempt]`, audited as §6.12 sets out, and an exemption on a test that does not fail is reported as `makes one claim, so it needs no exemption`.
+
+### 6.23 Detours gate
+
+The claims, absence and existence gates read `assert` statements. A helper that raises `AssertionError` or calls `pytest.fail` makes a claim none of them sees, and a `cast`, a `# type: ignore[union-attr]` or an `x or {}` reads through an optional value whose absence the test never claims, where a narrowing guard (§6.22) would. The fix is an `assert` in the test: a guard for the optional, a claim for the check.
+
+A site gate. A site is:
+
+- a `raise` of `AssertionError`, called or bare;
+- a call whose dotted name, as §6.12 resolves it, is `pytest.fail`, `typing.cast` or `typing_extensions.cast`;
+- an `or` expression whose last operand is an absent value (§6.11), as in `(result or {})["key"]`;
+- a `# type: ignore` comment with no error codes, or with `union-attr` among them.
+
+A comment belongs to the innermost function whose lines span it. A failing unit is reported as `path::unit: routes around an assert through d1, d2 at line N — assert in the test: a guard for an optional, a claim for a check`, the details `raise AssertionError`, `pytest.fail`, `cast`, `or <absent>` and `type: ignore` listed once each in order of first appearance, and an exemption that excuses nothing as `routes around no assert, so it needs no exemption`.
+
 ## 7. CLI
 
 ```
@@ -729,6 +770,8 @@ Third-party movers register under the `filepawl.movers` entry-point group and ar
 - Snapshots gate: a display at `max_items` leaves passes and one over fails; dict keys do not count; a golden read through `__file__` directly, through a module-level name and through a local name fails; a read of a temporary file passes; `snapshot` fails; `!=` is not read; exemption and each audit message.
 - Test-names gate: fewer than `min_words` words fails; a trailing number fails; a class name's words count for a method; exemption and each audit message.
 - Existence gate: each existence form fails alone and beside absence assertions, `type(x) == T` and `type(x) is T` included; a packed tuple assertion of existence and absence pairs fails, and one holding a value pair passes; an existence assertion beside a value assertion passes; all-absence tests are left to the absence gate; `pytest.raises` counts as asserting something else; exemption and each audit message.
+- Claims gate: one `assert` passes and two fail; asserts at any depth of blocks and inside a `with` block count, and one in a nested `def` does not; `pytest.raises` and an `assert*` call are not counted; a packed tuple assertion is one claim; each guard form, over a name, an attribute and a subscript, is no claim when a later statement reads its subject and a later `assert` is not a guard, and is a claim when its subject is not read again, when every later `assert` is a guard, and when it is the last; exemption and each audit message.
+- Detours gate: `raise AssertionError` bare and called; `pytest.fail` through `import` and `from`; `cast` from `typing` and `typing_extensions`, and a `cast` of another module passes; an `or` ending in each absent value fails and one ending in a present value passes; a bare `type: ignore` and one naming `union-attr` fail and one naming other codes passes; a comment inside a method and at module level is reported under its unit; exemption and each audit message.
 - Clocks gate: port the cases of Trivia Judge's `tests/gates/test_test_clocks.py` and Gauntlet's `test_clocks_selftest.py`, the case in which `interval=0.05` passes inverted; each sleep module through `import`, `from` and an alias, a zero sleep, a sleep on a name and on a seam; each clock read, and a clock named without a call; each pacing name bare and suffixed, as a keyword and as a dict key, small and in seconds and zero, and inside a conditional expression; a name added to `names`; the `asyncio.wait_for` and `asyncio.timeout` positions; exemption and each audit message.
 - Fakes gate: a fake by name and by file name; a lower-case own callee fails and a capitalised one passes; a third-party call passes; a call outside a fake passes; exemption and each audit message.
 - `accept`: adds, lowers, refuses to raise, drops stale, preserves reason, stable sort.
