@@ -62,6 +62,23 @@ _NEGATED: dict[type[ast.cmpop], type[ast.cmpop]] = {
 }
 
 
+_BOOL_CALLS = frozenset({"isinstance", "issubclass", "callable", "hasattr", "bool"})
+
+
+def _is_claim(node: ast.expr) -> bool:
+    """Return whether an expression yields a bool: a comparison, a `not`, or
+    a bool-valued builtin call."""
+    if isinstance(node, ast.Compare):
+        return True
+    if isinstance(node, ast.UnaryOp):
+        return isinstance(node.op, ast.Not)
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _BOOL_CALLS
+    )
+
+
 def _negated(node: ast.expr) -> ast.expr:
     """Return a claim's negation: one comparison flips its operator."""
     if isinstance(node, ast.Compare) and len(node.ops) == 1:
@@ -73,6 +90,8 @@ def _negated(node: ast.expr) -> ast.expr:
 def _pair(left: ast.expr, right: ast.expr) -> ast.expr:
     """Return the claim one position of a packed tuple assertion makes."""
     for side, other in ((left, right), (right, left)):
+        if not _is_claim(other):
+            continue
         if isinstance(side, ast.Constant) and side.value is True:
             return other
         if isinstance(side, ast.Constant) and side.value is False:
@@ -98,16 +117,34 @@ def packed(test: ast.expr) -> list[ast.expr] | None:
     return [_pair(a, b) for a, b in zip(left.elts, right.elts, strict=True)]
 
 
-def is_absence_assertion(node: ast.Assert) -> bool:
-    """Return whether an assert claims only that something is absent."""
-    return is_absence(node.test)
+ABSENCE = "absence"
+EXISTENCE = "existence"
+VALUE = "value"
+
+_EXISTENCE_CALLS = _BOOL_CALLS | {"len"}
 
 
-def is_absence(test: ast.expr) -> bool:
-    """Return whether an assert's test claims only that something is absent."""
+def kind(test: ast.expr) -> str:
+    """Return what an assert's test claims: ABSENCE, EXISTENCE or VALUE
+    (design.md §6.11, §6.18). A packed tuple assertion claims absence when
+    every pair does, a value when any pair does, and existence otherwise."""
     claims = packed(test)
     if claims is not None:
-        return all(is_absence(claim) for claim in claims)
+        kinds = {kind(claim) for claim in claims}
+        if kinds <= {ABSENCE}:
+            return ABSENCE
+        return VALUE if VALUE in kinds else EXISTENCE
+    if _is_absence(test):
+        return ABSENCE
+    return EXISTENCE if _is_existence(test) else VALUE
+
+
+def is_absence_assertion(node: ast.Assert) -> bool:
+    """Return whether an assert claims only that something is absent."""
+    return kind(node.test) == ABSENCE
+
+
+def _is_absence(test: ast.expr) -> bool:
     if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
         return True
     if not isinstance(test, ast.Compare) or len(test.ops) != 1:
@@ -115,6 +152,58 @@ def is_absence(test: ast.expr) -> bool:
     if not isinstance(test.ops[0], (ast.Eq, ast.Is)):
         return False
     return is_absent(test.left) or is_absent(test.comparators[0])
+
+
+def _is_existence(test: ast.expr) -> bool:
+    if isinstance(test, (ast.Name, ast.Attribute, ast.Subscript)):
+        return True
+    if isinstance(test, ast.Call):
+        return _called(test) in _EXISTENCE_CALLS
+    if not isinstance(test, ast.Compare) or len(test.ops) != 1:
+        return False
+    op, left, right = test.ops[0], test.left, test.comparators[0]
+    if isinstance(op, (ast.IsNot, ast.NotEq)):
+        return is_absent(left) or is_absent(right)
+    if isinstance(op, (ast.Eq, ast.Is)):
+        return _is_type_call(left) or _is_type_call(right)
+    if isinstance(op, ast.In):
+        return _is_key_listing(right)
+    return (
+        (isinstance(op, ast.Gt) and _is_int(right, 0))
+        or (isinstance(op, ast.GtE) and _is_int(right, 1))
+        or (isinstance(op, ast.Lt) and _is_int(left, 0))
+        or (isinstance(op, ast.LtE) and _is_int(left, 1))
+    )
+
+
+def _called(node: ast.Call) -> str | None:
+    """Return the bare name a call calls, or None."""
+    return node.func.id if isinstance(node.func, ast.Name) else None
+
+
+def _is_type_call(node: ast.expr) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and _called(node) == "type"
+        and len(node.args) == 1
+        and not node.keywords
+    )
+
+
+def _is_key_listing(node: ast.expr) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr == "keys"
+    return _called(node) in ("vars", "dir")
+
+
+def _is_int(node: ast.expr, value: int) -> bool:
+    return (
+        isinstance(node, ast.Constant)
+        and type(node.value) is int
+        and node.value == value
+    )
 
 
 def _asserts_otherwise(node: ast.AST) -> bool:

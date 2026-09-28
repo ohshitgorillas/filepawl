@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **The existence gate fails tests that assert only that a value exists.** A test whose every `assert` claims only that its result is truthy, not `None`, of some type or non-empty fails: a stub returning any value passes it too. Only test paths are checked.
+- **The existence gate reads `[tool.filepawl.existence]` in `pyproject.toml`.** `include`, `exempt` keyed `path::qualified.name` with a reason, and `enabled`; the `filepawl init` stub carries the block.
+
 ### Changed
 
 - **A tuple of absent claims no longer passes the absence gate.** A test whose only assert is `assert (result is None, out) == (True, "")` fails.

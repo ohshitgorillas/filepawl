@@ -192,6 +192,7 @@ class TestPackedAssertions:
             "(run() == [], out) == (False, None)",
             "(a, (b, c)) == (None, (None, [1]))",
             "(a, b) == (True, None, 0)",
+            "(flag, out) == (True, None)",
             "(*a, b) == (True, None)",
         ],
     )

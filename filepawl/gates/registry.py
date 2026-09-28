@@ -28,6 +28,7 @@ _BUILTIN_GATES: tuple[tuple[str, str, str], ...] = (
     ("handlers", "filepawl.gates.handlers", "HandlersGate"),
     ("reach", "filepawl.gates.reach", "ReachGate"),
     ("absence", "filepawl.gates.suite.absence", "AbsenceGate"),
+    ("existence", "filepawl.gates.suite.existence", "ExistenceGate"),
     ("private", "filepawl.gates.suite.private", "PrivateGate"),
     ("mocks", "filepawl.gates.suite.mocks", "MocksGate"),
     ("clocks", "filepawl.gates.suite.clocks", "ClocksGate"),

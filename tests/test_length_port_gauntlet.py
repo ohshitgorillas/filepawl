@@ -128,7 +128,9 @@ def test_allowance_naming_no_file_fails(repo: Repo) -> None:
     pol = policy()
     state = state_for({"hooks/deleted.py": Entry(lines=WATCH + 4)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert len(findings) > 0
+    assert messages(findings) == [
+        ("hooks/deleted.py", "allowance names a path outside the tree; drop it")
+    ]
     assert findings[0].path == "hooks/deleted.py"
 
 
@@ -154,7 +156,9 @@ def test_stale_allowance_for_unmeasured_file_fails(repo: Repo) -> None:
     # Measure only small.py, but the full state table is still audited
     # untouched.py is stale because it's back under watch line
     findings = LengthGate().run(tree_for(root, pol, ["hooks/small.py"]), pol, state)
-    assert len(findings) > 0
+    assert messages(findings) == [
+        ("hooks/untouched.py", "back under watch line 40; drop it")
+    ]
     assert findings[0].path == "hooks/untouched.py"
 
 
@@ -165,7 +169,9 @@ def test_allowance_for_file_back_under_watch_line_fails(repo: Repo) -> None:
     pol = policy()
     state = state_for({"hooks/long.py": Entry(lines=WATCH + 4)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert len(findings) > 0
+    assert messages(findings) == [
+        ("hooks/long.py", "back under watch line 40; drop it")
+    ]
     assert findings[0].path == "hooks/long.py"
 
 
@@ -176,7 +182,9 @@ def test_allowance_for_file_at_watch_line_fails(repo: Repo) -> None:
     pol = policy()
     state = state_for({"hooks/long.py": Entry(lines=WATCH)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert len(findings) > 0
+    assert messages(findings) == [
+        ("hooks/long.py", "back under watch line 40; drop it")
+    ]
 
 
 # Test case 12: "a source file at the hard cap passes with a matching allowance"
@@ -196,7 +204,7 @@ def test_allowance_cannot_exceed_hard_cap(repo: Repo) -> None:
     pol = policy()
     state = state_for({"hooks/long.py": Entry(lines=CAP + 1)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert len(findings) > 0
+    assert messages(findings) == [("hooks/long.py", "over cap 50 (51 lines); split it")]
 
 
 # Test case 14: "a source file over the hard cap with no entry fails"
@@ -205,7 +213,13 @@ def test_file_over_hard_cap_no_entry_fails(repo: Repo) -> None:
     root = repo({"hooks/long.py": CAP + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert len(findings) > 0
+    assert messages(findings) == [
+        ("hooks/long.py", "over cap 50 (51 lines); split it"),
+        (
+            "hooks/long.py",
+            "over watch line 40 (51 lines); run `filepawl accept hooks/long.py`",
+        ),
+    ]
 
 
 # Test case 15: "a test file over the watch line passes with no entry"
@@ -232,7 +246,7 @@ def test_test_file_over_tests_cap_fails(repo: Repo) -> None:
     root = repo({"tests/test_many.py": CAP_TESTS + 1})
     pol = policy()
     findings = LengthGate().run(tree_for(root, pol), pol, State())
-    assert len(findings) > 0
+    assert messages(findings) == [("tests/test_many.py", "test over cap 80 (81 lines)")]
 
 
 # Test case 18: "an allowance naming a test path fails as stale"
@@ -242,7 +256,9 @@ def test_allowance_naming_test_path_fails(repo: Repo) -> None:
     pol = policy()
     state = state_for({"tests/test_many.py": Entry(lines=CAP_TESTS - 10)})
     findings = LengthGate().run(tree_for(root, pol), pol, state)
-    assert len(findings) > 0
+    assert messages(findings) == [
+        ("tests/test_many.py", "allowance names a test path; drop it")
+    ]
 
 
 # Test case 19: "one offender among compliant files fails the gate"

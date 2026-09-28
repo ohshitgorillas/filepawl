@@ -491,7 +491,11 @@ def test_live_exemption_for_file_not_on_argv_passes(repo: RepoFactory) -> None:
 def test_several_violations_all_fail(repo: RepoFactory) -> None:
     """Port of test_several_violations_all_fail_the_run."""
     root = repo({"hqptuner/core/deep.py": THREE_VIOLATIONS})
-    assert _run(root, _policy()) != []
+    assert [finding.path for finding in _run(root, _policy())] == [
+        "hqptuner/core/deep.py::one",
+        "hqptuner/core/deep.py::three",
+        "hqptuner/core/deep.py::two",
+    ]
 
 
 def test_several_violations_are_one_finding_each(repo: RepoFactory) -> None:

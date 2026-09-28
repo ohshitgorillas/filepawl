@@ -23,6 +23,7 @@ BUILTINS = [
     "handlers",
     "reach",
     "absence",
+    "existence",
     "private",
     "mocks",
     "clocks",
