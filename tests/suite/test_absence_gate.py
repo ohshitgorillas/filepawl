@@ -170,6 +170,37 @@ class TestPresentValues:
         assert _judge(repo, *lines) == [BAD]
 
 
+class TestPackedAssertions:
+    @pytest.mark.parametrize(
+        "test",
+        [
+            "(run() is None, out) == (True, '')",
+            "(out, run() == []) == ([], True)",
+            "(run() is not None, out) == (False, None)",
+            "(run() != [], out) == (False, 0)",
+            "(flag, out) == (False, None)",
+            "(a, (run() is None, b)) == (None, (True, 0))",
+        ],
+    )
+    def test_packed_absence_pairs_fail(self, repo: RepoFactory, test: str) -> None:
+        assert _fails(repo, f"assert {test}") == [F]
+
+    @pytest.mark.parametrize(
+        "test",
+        [
+            "(run() is None, out) == (True, [1])",
+            "(run() == [], out) == (False, None)",
+            "(a, (b, c)) == (None, (None, [1]))",
+            "(a, b) == (True, None, 0)",
+            "(*a, b) == (True, None)",
+        ],
+    )
+    def test_packed_assertion_with_a_present_pair_passes(
+        self, repo: RepoFactory, test: str
+    ) -> None:
+        assert _judge(repo, f"assert {test}") == [BAD]
+
+
 class TestAssertingSomethingElse:
     @pytest.mark.parametrize(
         "context",

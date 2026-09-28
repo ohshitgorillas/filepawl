@@ -48,9 +48,66 @@ def is_absent(node: ast.expr) -> bool:
     return False
 
 
+_NEGATED: dict[type[ast.cmpop], type[ast.cmpop]] = {
+    ast.Eq: ast.NotEq,
+    ast.NotEq: ast.Eq,
+    ast.Is: ast.IsNot,
+    ast.IsNot: ast.Is,
+    ast.In: ast.NotIn,
+    ast.NotIn: ast.In,
+    ast.Lt: ast.GtE,
+    ast.GtE: ast.Lt,
+    ast.Gt: ast.LtE,
+    ast.LtE: ast.Gt,
+}
+
+
+def _negated(node: ast.expr) -> ast.expr:
+    """Return a claim's negation: one comparison flips its operator."""
+    if isinstance(node, ast.Compare) and len(node.ops) == 1:
+        flipped = _NEGATED[type(node.ops[0])]()
+        return ast.Compare(left=node.left, ops=[flipped], comparators=node.comparators)
+    return ast.UnaryOp(op=ast.Not(), operand=node)
+
+
+def _pair(left: ast.expr, right: ast.expr) -> ast.expr:
+    """Return the claim one position of a packed tuple assertion makes."""
+    for side, other in ((left, right), (right, left)):
+        if isinstance(side, ast.Constant) and side.value is True:
+            return other
+        if isinstance(side, ast.Constant) and side.value is False:
+            return _negated(other)
+    return ast.Compare(left=left, ops=[ast.Eq()], comparators=[right])
+
+
+def packed(test: ast.expr) -> list[ast.expr] | None:
+    """Return the claims a packed tuple assertion makes, one per position, or
+    None when the test is not one (design.md §6.11)."""
+    if not isinstance(test, ast.Compare) or len(test.ops) != 1:
+        return None
+    left, right = test.left, test.comparators[0]
+    if not (
+        isinstance(test.ops[0], ast.Eq)
+        and isinstance(left, ast.Tuple)
+        and isinstance(right, ast.Tuple)
+        and len(left.elts) == len(right.elts)
+    ):
+        return None
+    if any(isinstance(elt, ast.Starred) for elt in left.elts + right.elts):
+        return None
+    return [_pair(a, b) for a, b in zip(left.elts, right.elts, strict=True)]
+
+
 def is_absence_assertion(node: ast.Assert) -> bool:
     """Return whether an assert claims only that something is absent."""
-    test = node.test
+    return is_absence(node.test)
+
+
+def is_absence(test: ast.expr) -> bool:
+    """Return whether an assert's test claims only that something is absent."""
+    claims = packed(test)
+    if claims is not None:
+        return all(is_absence(claim) for claim in claims)
     if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
         return True
     if not isinstance(test, ast.Compare) or len(test.ops) != 1:
