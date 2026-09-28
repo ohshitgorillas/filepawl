@@ -12,8 +12,9 @@ ported. The source's ``EXEMPT`` table is expressed as ``NestingPolicy.exempt``.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -169,9 +170,9 @@ def _stale(key: str, message: str) -> Finding:
 
 
 def _run(
-    root: Path, *, max_depth: int = 4, exempt: dict[str, str] | None = None
+    root: Path, *, max_depth: int = 4, exempt: Mapping[str, str] = MappingProxyType({})
 ) -> list[Finding]:
-    nesting = NestingPolicy(max_depth=max_depth, exempt=exempt or {})
+    nesting = NestingPolicy(max_depth=max_depth, exempt=dict(exempt))
     policy: Policy = dataclasses.replace(default_policy(), nesting=nesting)
     return NestingGate().run(build_tree(root, policy), policy, State())
 

@@ -292,7 +292,7 @@ class TestGate:
         table = getattr(policy.suite, self.name)
         findings: list[Finding] = []
         measured: dict[str, dict[str, bool]] = {}
-        for path, module in parsed(tree, table.include):
+        for path, module, _ in parsed(tree, table.include):
             judged = measured.setdefault(path, {})
             for name, test in tests_in(module):
                 failed = self.fails(test)

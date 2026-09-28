@@ -120,8 +120,10 @@ def _units_below(
             yield from _units_below(child, unit, prefix)
 
 
-def parsed(tree: Tree, include: tuple[str, ...]) -> Iterator[tuple[str, ast.Module]]:
-    """Yield each checked file that parses, with its module."""
+def parsed(
+    tree: Tree, include: tuple[str, ...]
+) -> Iterator[tuple[str, ast.Module, str]]:
+    """Yield each checked file that parses, with its module and text."""
     for path in checked_files(tree, include):
         try:
             text = (tree.root / path).read_text(encoding="utf-8")
@@ -130,7 +132,7 @@ def parsed(tree: Tree, include: tuple[str, ...]) -> Iterator[tuple[str, ast.Modu
             # Syntax is the compiler's gate; a file that does not parse has
             # nothing to judge.
             continue
-        yield path, module
+        yield path, module, text
 
 
 def checked_files(tree: Tree, include: tuple[str, ...]) -> list[str]:
@@ -189,6 +191,10 @@ class SiteGate:
         """Return (unit, line, detail) for every site in a module."""
         raise NotImplementedError
 
+    def text_sites(self, module: ast.Module, text: str) -> list[tuple[str, int, str]]:
+        """Return (unit, line, detail) for every site in a module's comments."""
+        return []
+
     def describe(self, details: list[str]) -> str:
         """Return what a unit with these site details does."""
         raise NotImplementedError
@@ -198,7 +204,7 @@ class SiteGate:
         own = own_names(tree, policy)
         findings: list[Finding] = []
         measured: dict[str, dict[str, bool]] = {}
-        for path, module in parsed(tree, table.include):
+        for path, module, text in parsed(tree, table.include):
             judged = measured.setdefault(path, {MODULE_UNIT: False})
             judged.update(
                 (unit, False)
@@ -206,9 +212,8 @@ class SiteGate:
                 if isinstance(node, _FUNCS)
             )
             grouped: dict[str, list[tuple[int, str]]] = {}
-            for unit, line, detail in self.sites(
-                module, read_imports(module, own), policy
-            ):
+            found_sites = self.sites(module, read_imports(module, own), policy)
+            for unit, line, detail in found_sites + self.text_sites(module, text):
                 grouped.setdefault(unit, []).append((line, detail))
             for unit, found in grouped.items():
                 judged[unit] = True

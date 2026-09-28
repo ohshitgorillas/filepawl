@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - **The claims gate fails a test that makes more than one claim.** A test with `assert out.code == 3` and `assert out.body == "ok"` fails. Split it into two tests, or assert `(out.code, out.body) == (3, "ok")`.
 - **The claims gate reads `[tool.filepawl.claims]` in `pyproject.toml`.** `include`, `exempt` keyed `path::qualified.name` with a reason, and `enabled`; the `filepawl init` stub carries the block.
+- **The detours gate fails a test that fails or narrows without an assert.** A test reading `(result or {})["key"]` fails; write `assert result is not None`, then read `result["key"]`. A helper's `raise AssertionError` or `pytest.fail`, a `cast`, and a bare `# type: ignore` or one naming `union-attr` fail the same way.
+- **The detours gate reads `[tool.filepawl.detours]` in `pyproject.toml`.** `include`, `exempt` keyed `path::qualified.name` with a reason, and `enabled`; the `filepawl init` stub carries the block.
 
 ### Changed
 

@@ -11,8 +11,9 @@ here as ``NestingPolicy.exempt``. The gate runs over the whole tree (design.md
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 from filepawl.config import Policy, default_policy
 from filepawl.config_code import NestingPolicy
@@ -91,10 +92,10 @@ def _run(
     files: dict[str, str | int],
     repo: RepoFactory,
     *,
-    exempt: dict[str, str] | None = None,
+    exempt: Mapping[str, str] = MappingProxyType({}),
 ) -> list[Finding]:
     root = repo(files)
-    nesting = NestingPolicy(exempt=exempt or {})
+    nesting = NestingPolicy(exempt=dict(exempt))
     policy: Policy = dataclasses.replace(default_policy(), nesting=nesting)
     return NestingGate().run(build_tree(root, policy), policy, State())
 

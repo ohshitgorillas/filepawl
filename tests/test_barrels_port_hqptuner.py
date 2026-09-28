@@ -10,8 +10,9 @@ whose path or message carries the name.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -159,13 +160,13 @@ PUBLIC = "the public import path third parties already use"
 
 
 def _policy(
-    forwarder_exempt: dict[str, str] | None = None,
-    module_exempt: dict[str, str] | None = None,
+    forwarder_exempt: Mapping[str, str] = MappingProxyType({}),
+    module_exempt: Mapping[str, str] = MappingProxyType({}),
 ) -> Policy:
     barrels = BarrelsPolicy(
         forwarders=HQPTUNER_SCOPE,
-        forwarder_exempt=forwarder_exempt or {},
-        module_exempt=module_exempt or {},
+        forwarder_exempt=dict(forwarder_exempt),
+        module_exempt=dict(module_exempt),
     )
     return dataclasses.replace(default_policy(), barrels=barrels)
 

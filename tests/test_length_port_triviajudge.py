@@ -30,11 +30,11 @@ CAP_TESTS = 800
 WATCH = 400
 
 
-def policy(**overrides: object) -> Policy:
-    """Default policy with triviajudge's limits, plus any overrides."""
+def policy() -> Policy:
+    """Default policy with triviajudge's limits."""
     base = default_policy()
     length = dataclasses.replace(base.length, cap=CAP, cap_tests=CAP_TESTS, watch=WATCH)
-    return dataclasses.replace(base, length=length, **overrides)  # type: ignore
+    return dataclasses.replace(base, length=length)
 
 
 def tree_for(root: Path, pol: Policy, paths: list[str] | None = None):

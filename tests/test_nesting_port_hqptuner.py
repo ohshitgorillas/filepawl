@@ -10,8 +10,9 @@ carries the name; "one line" becomes one finding.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -158,8 +159,10 @@ def f(level):
 """
 
 
-def _policy(exempt: dict[str, str] | None = None, max_depth: int = 4) -> Policy:
-    nesting = NestingPolicy(max_depth=max_depth, exempt=exempt or {})
+def _policy(
+    exempt: Mapping[str, str] = MappingProxyType({}), max_depth: int = 4
+) -> Policy:
+    nesting = NestingPolicy(max_depth=max_depth, exempt=dict(exempt))
     return dataclasses.replace(default_policy(), nesting=nesting)
 
 

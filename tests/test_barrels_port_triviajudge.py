@@ -10,8 +10,9 @@ the source's order. The source script checks rule 2 only under
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -165,13 +166,13 @@ MOD_MISSING = "triviajudge/mod.py::missing"
 def _run(
     root: Path,
     *,
-    forwarder_exempt: dict[str, str] | None = None,
-    module_exempt: dict[str, str] | None = None,
+    forwarder_exempt: Mapping[str, str] = MappingProxyType({}),
+    module_exempt: Mapping[str, str] = MappingProxyType({}),
 ) -> list[Finding]:
     barrels = BarrelsPolicy(
         forwarders=FORWARDER_SCOPE,
-        module_exempt=module_exempt or {},
-        forwarder_exempt=forwarder_exempt or {},
+        module_exempt=dict(module_exempt),
+        forwarder_exempt=dict(forwarder_exempt),
     )
     policy: Policy = dataclasses.replace(default_policy(), barrels=barrels)
     return BarrelsGate().run(build_tree(root, policy), policy, State())
