@@ -112,6 +112,7 @@ filepawl/
     suite/
       __init__.py
       common.py     # own code, own bindings, sites, tests, exemption audit
+    testgate.py   # what a test is, what its assertions claim, the test-gate engine
     absence.py    # tests that assert only an absent value
       private.py    # tests that reach private names
       mocks.py      # tests that patch or mock own code
