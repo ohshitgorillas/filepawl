@@ -216,6 +216,15 @@ Brief content: Create `pyproject.toml` (name filepawl, requires-python >=3.12, d
 - **`chore: move the code-gate policies to config_code`**: `filepawl/config_code.py` takes the barrels, nesting, returns, named-results and handlers policies and their builders out of `filepawl/config.py`; tests import them from there; no behavior changes.
 - **`feat: reach gate`**: `ReachPolicy` in `filepawl/config_code.py` (`enabled`, `include`, `exempt`), `reach` reserved, registry `_is_enabled` branch, `filepawl/policy_stub.py`; `filepawl/gates/reach.py`, after the handlers gate in `_BUILTIN_GATES`; tests in `tests/test_reach_gate.py`, `tests/test_config.py` and `tests/test_gate_registry.py`; `README.md` and the `[Unreleased]` section of `CHANGELOG.md` describe the gate.
 
+### Packed assertions and handler items (spec §6.10, §6.11, §6.18)
+
+- **`docs: packed assertions and handler items spec`**: `docs/design.md` §2, §6.10, §6.11, §6.18, §7.2, §9; `docs/plan.md`.
+- **`chore: share the test-gate engine`**: `filepawl/gates/suite/testgate.py` takes what a test is, its asserts and the per-test engine out of `filepawl/gates/suite/absence.py`; `docs/design.md` §3; no behavior changes.
+- **`feat: absence gate reads packed assertions pair by pair`**: the §6.11 tuple reading in `filepawl/gates/suite/testgate.py`; tests in `tests/suite/test_absence_gate.py`; `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
+- **`feat: existence policy`**: `existence` in `filepawl/config_suite.py`, registry and stub; tests in `tests/suite/test_config_suite.py` and `tests/test_gate_registry.py`.
+- **`feat: existence gate`**: `filepawl/gates/suite/existence.py`, after the absence gate in `_BUILTIN_GATES`; tests in `tests/suite/test_existence_gate.py`; any test in this tree it fails rewritten in the same commit, with no exemption; `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
+- **`feat: handlers gate traces constant-key items and plain-name attributes`**: `filepawl/gates/handlers.py`, the judge prompt in `filepawl/judge/prompt.py`; tests in `tests/test_handlers_gate.py`; `README.md` and the `[Unreleased]` section of `CHANGELOG.md`.
+
 ## Verification (orchestrator, end)
 
 ```
