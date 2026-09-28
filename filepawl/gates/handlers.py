@@ -1,8 +1,8 @@
 """Handlers gate: no sentinel values from exception handlers (design.md §6.10).
 
-A `return` inside an `except`, or a name bound there that a later return
-reads, turns the exception into a value the caller must know to test for,
-and drops the exception's type and traceback.
+A `return` inside an `except`, or a name, constant-key item or attribute
+bound there that a later return reads, turns the exception into a value the
+caller must know to test for, and drops the exception's type and traceback.
 """
 
 from __future__ import annotations
@@ -39,27 +39,44 @@ class _Function:
 _Found = list[tuple[str, _Function]]
 
 
+def _spelled(node: ast.AST) -> str | None:
+    """Return the key a handler binding and a return read share: a plain
+    name, or the source spelling of a constant-key item or an attribute of
+    a plain name; None for any other node."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
+        return ast.unparse(node) if isinstance(node.value, ast.Name) else None
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        return ast.unparse(node)
+    return None
+
+
 def _reads(node: ast.expr | None) -> frozenset[str]:
-    """Return every name an expression loads."""
+    """Return every name, constant-key item and plain-name attribute an
+    expression loads."""
     if node is None:
         return frozenset()
     return frozenset(
-        n.id
+        key
         for n in ast.walk(node)
-        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+        if isinstance(getattr(n, "ctx", None), ast.Load)
+        and (key := _spelled(n)) is not None
     )
 
 
 def _binds(node: ast.Assign | ast.AnnAssign | ast.AugAssign) -> list[str]:
-    """Return the plain names an assignment statement binds."""
+    """Return the plain names, constant-key items and plain-name attributes
+    an assignment statement binds."""
     if isinstance(node, ast.AnnAssign) and node.value is None:
         return []
     targets = node.targets if isinstance(node, ast.Assign) else [node.target]
     return [
-        n.id
+        key
         for target in targets
         for n in ast.walk(target)
-        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+        if isinstance(getattr(n, "ctx", None), ast.Store)
+        and (key := _spelled(n)) is not None
     ]
 
 

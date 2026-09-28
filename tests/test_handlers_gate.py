@@ -6,6 +6,8 @@ import dataclasses
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
 from filepawl.config import Policy, default_policy
 from filepawl.config_code import HandlersPolicy
 from filepawl.gates.base import Finding
@@ -268,6 +270,56 @@ class TestHandlerAssignments:
             "        self.failed = True\n"
             "        out['error'] = 1\n"
             "    return self, out\n"
+        )
+        root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
+        assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]
+
+    @pytest.mark.parametrize(
+        ("stored", "read"),
+        [
+            ("result['reason'] = 'unavailable'", "result['reason']"),
+            ('result["reason"] = "unavailable"', "result['reason']"),
+            ("result[0] = None", "result[0]"),
+            ("result['misses'] += 1", "result['misses']"),
+            ("self.cache = None", "self.cache"),
+            ("self.cache: Cache | None = None", "(self.cache, 1)"),
+        ],
+    )
+    def test_constant_key_item_or_attribute_read_back_fails(
+        self, repo: RepoFactory, stored: str, read: str
+    ) -> None:
+        source = (
+            "def f(self, result):\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E:\n"
+            f"        {stored}\n"
+            f"    return {read}\n"
+        )
+        root = repo({"m.py": source})
+        assert _run(root, _policy()) == [Finding("m.py::f", _lines(5))]
+
+    @pytest.mark.parametrize(
+        ("stored", "read"),
+        [
+            ("result['reason'] = None", "result"),
+            ("result['reason'] = None", "result['other']"),
+            ("result[key] = None", "result[key]"),
+            ("self.cache = None", "self.other"),
+            ("self.a.cache = None", "self.a.cache"),
+            ("result['reason'] = None", "other['reason']"),
+        ],
+    )
+    def test_other_items_and_attributes_bind_nothing_the_return_reads(
+        self, repo: RepoFactory, stored: str, read: str
+    ) -> None:
+        source = (
+            "def f(self, result, other, key):\n"
+            "    try:\n"
+            "        g()\n"
+            "    except E:\n"
+            f"        {stored}\n"
+            f"    return {read}\n"
         )
         root = repo({"m.py": source, "n.py": VALUE_IN_HANDLER})
         assert _run(root, _policy()) == [Finding("n.py::f", _lines(5))]

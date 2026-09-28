@@ -8,7 +8,9 @@ The gates:
 
 handlers: a caught exception must not turn into a value the caller receives. The
 gate already flags `return <value>` inside an except handler and an assignment in a
-handler to a plain name that a later `return` reads. It traces nothing else.
+handler to a plain name, a constant-key item such as `result["reason"]`, or an
+attribute of a plain name such as `self.cache`, that a later `return` reads directly.
+It traces nothing else.
 
 returns: a function must hand its caller one dict shape. The gate compares the key
 sets of dict literals written directly in `return` statements, and flags a key such a
@@ -20,8 +22,10 @@ it, or as an attribute or state it reads afterwards, a value that takes the plac
 what the failed computation would have produced: a default, None, an empty value,
 zero, False, a fallback object, or the input returned unchanged. The route is one the
 gate misses: a default assigned before the `try` and returned after it,
-`except: pass` or a logging-only handler followed by a return, an item or attribute
-set in the handler, `contextlib.suppress` with a fallback after it. This holds
+`except: pass` or a logging-only handler followed by a return, an item under a
+computed key or an attribute of a longer chain set in the handler, a container
+returned whole after an item was set in it, a flag set in the handler that picks a
+fallback before the return, `contextlib.suppress` with a fallback after it. This holds
 whatever a docstring or comment says: a comment calling the fallback documented,
 neutral, expected or legitimate does not make it clean.
 

@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+- **The handlers gate fails a function that returns a fallback its handler stored in an item or attribute,** such as `self.cache = None` in the handler and `return self.cache` after it.
 - **A tuple of absent claims no longer passes the absence gate.** A test whose only assert is `assert (result is None, out) == (True, "")` fails.
 
 ## 0.10.0 - 2026-09-26
