@@ -94,6 +94,13 @@ DEFAULT_POLICY_STUB = (
             '# "path::qualified.name" = reason. Human-edited. A test whose '
             "claims stand together on purpose.",
             "",
+            "[tool.filepawl.detours]",
+            'include = ["**/*.py"]',
+            "",
+            "[tool.filepawl.detours.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A function that '
+            "routes around an assert on purpose.",
+            "",
             "[tool.filepawl.private]",
             'include = ["**/*.py"]',
             "",

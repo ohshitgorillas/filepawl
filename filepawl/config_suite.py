@@ -34,12 +34,21 @@ class SuitePolicies:
     absence: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     existence: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     claims: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
+    detours: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     private: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     mocks: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     clocks: ClocksPolicy = field(default_factory=ClocksPolicy)
 
 
-SUITE_TABLES = ("absence", "existence", "claims", "private", "mocks", "clocks")
+SUITE_TABLES = (
+    "absence",
+    "existence",
+    "claims",
+    "detours",
+    "private",
+    "mocks",
+    "clocks",
+)
 
 
 def build_suite(raw: dict[str, object]) -> SuitePolicies:
@@ -47,6 +56,7 @@ def build_suite(raw: dict[str, object]) -> SuitePolicies:
         absence=_build_plain("absence", raw.get("absence")),
         existence=_build_plain("existence", raw.get("existence")),
         claims=_build_plain("claims", raw.get("claims")),
+        detours=_build_plain("detours", raw.get("detours")),
         private=_build_plain("private", raw.get("private")),
         mocks=_build_plain("mocks", raw.get("mocks")),
         clocks=_build_clocks(raw.get("clocks")),
