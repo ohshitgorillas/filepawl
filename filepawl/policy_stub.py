@@ -80,6 +80,13 @@ DEFAULT_POLICY_STUB = (
             '# "path::qualified.name" = reason. Human-edited. A test that '
             "asserts only an absent value on purpose.",
             "",
+            "[tool.filepawl.existence]",
+            'include = ["**/*.py"]',
+            "",
+            "[tool.filepawl.existence.exempt]",
+            '# "path::qualified.name" = reason. Human-edited. A test whose '
+            "contract is existence.",
+            "",
             "[tool.filepawl.private]",
             'include = ["**/*.py"]',
             "",

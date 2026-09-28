@@ -32,17 +32,19 @@ class SuitePolicies:
     """One policy per test-suite gate, keyed by the gate's table name."""
 
     absence: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
+    existence: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     private: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     mocks: SuiteGatePolicy = field(default_factory=SuiteGatePolicy)
     clocks: ClocksPolicy = field(default_factory=ClocksPolicy)
 
 
-SUITE_TABLES = ("absence", "private", "mocks", "clocks")
+SUITE_TABLES = ("absence", "existence", "private", "mocks", "clocks")
 
 
 def build_suite(raw: dict[str, object]) -> SuitePolicies:
     return SuitePolicies(
         absence=_build_plain("absence", raw.get("absence")),
+        existence=_build_plain("existence", raw.get("existence")),
         private=_build_plain("private", raw.get("private")),
         mocks=_build_plain("mocks", raw.get("mocks")),
         clocks=_build_clocks(raw.get("clocks")),
